@@ -7,10 +7,15 @@ import 'package:battery_monitor_app/main.dart';
 
 void main() {
   testWidgets('shows the Battery Monitor dashboard', (WidgetTester tester) async {
-    await tester.pumpWidget(BatteryMonitorApp(ble: _FakeBatteryMonitorBle()));
+    await tester.pumpWidget(
+      BatteryMonitorApp(
+        ble: _FakeBatteryMonitorBle(),
+      ),
+    );
 
     expect(find.text('Battery Monitor'), findsOneWidget);
     expect(find.text('Scan for monitors'), findsOneWidget);
+    expect(find.textContaining('App 0.1.1+2'), findsOneWidget);
   });
 }
 

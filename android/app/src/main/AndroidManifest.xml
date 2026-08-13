@@ -1,4 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required by Android 11 / API 30 and older for BLE scanning and use. -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+
     <!-- Android 12 / API 31 and newer. The app never derives location from BLE. -->
     <uses-permission
         android:name="android.permission.BLUETOOTH_SCAN"

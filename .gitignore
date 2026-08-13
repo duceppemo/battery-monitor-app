@@ -28,3 +28,5 @@ android/key.properties
 *.keystore
 *.p12
 *.mobileprovision
+# Widget Preview related
+.widget_preview/

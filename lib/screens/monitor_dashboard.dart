@@ -1,15 +1,22 @@
 import 'dart:async';
 
+import 'package:battery_monitor_app/app_build_info.dart';
 import 'package:battery_monitor_app/ble/battery_monitor_ble.dart';
+import 'package:battery_monitor_app/ble/ble_permission_gate.dart';
 import 'package:battery_monitor_app/models/binary_telemetry_v1.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
 
 class MonitorDashboard extends StatefulWidget {
-  MonitorDashboard({super.key, BatteryMonitorBleClient? ble})
-      : ble = ble ?? BatteryMonitorBle();
+  MonitorDashboard({
+    super.key,
+    BatteryMonitorBleClient? ble,
+    BlePermissionGate? permissionGate,
+  })  : ble = ble ?? BatteryMonitorBle(),
+        permissionGate = permissionGate ?? PlatformBlePermissionGate();
 
   final BatteryMonitorBleClient ble;
+  final BlePermissionGate permissionGate;
 
   @override
   State<MonitorDashboard> createState() => _MonitorDashboardState();
@@ -23,7 +30,13 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
   StreamSubscription<BinaryTelemetryV1>? _telemetrySubscription;
   BinaryTelemetryV1? _telemetry;
   String _status = 'Ready to scan';
-  String? _connectedDeviceId;
+  DeviceConnectionState? _connectionState;
+  String? _selectedDeviceId;
+
+  bool get _isConnected =>
+      _connectionState == DeviceConnectionState.connected;
+  bool get _isConnecting =>
+      _connectionState == DeviceConnectionState.connecting;
 
   @override
   void dispose() {
@@ -33,15 +46,30 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
     super.dispose();
   }
 
-  void _scan() {
-    _scanSubscription?.cancel();
+  Future<void> _scan() async {
+    final permission = await widget.permissionGate.request();
+    if (!mounted) return;
+    if (permission != BlePermissionState.ready) {
+      setState(() {
+        _status = permission == BlePermissionState.permanentlyDenied
+            ? 'Bluetooth permission is blocked. Enable it in app settings.'
+            : 'Bluetooth permission is required to scan for monitors.';
+      });
+      return;
+    }
+
+    await _scanSubscription?.cancel();
+    if (!mounted) return;
     setState(() {
       _devices.clear();
-      _status = 'Scanning for Battery Monitor…';
+      _selectedDeviceId = null;
+      _connectionState = null;
+      _telemetry = null;
+      _status = 'Scanning for Battery Monitor...';
     });
     _scanSubscription = widget.ble.scan().listen(
       (device) {
-        if (!mounted) return;
+        if (!mounted || _connectionState != null) return;
         setState(() {
           _devices[device.id] = device;
           _status = 'Select a monitor to connect';
@@ -53,24 +81,42 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
     );
   }
 
-  void _connect(DiscoveredDevice device) {
-    _connectionSubscription?.cancel();
-    _telemetrySubscription?.cancel();
+  Future<void> _connect(DiscoveredDevice device) async {
+    await _connectionSubscription?.cancel();
+    await _telemetrySubscription?.cancel();
+    await _scanSubscription?.cancel();
+    _scanSubscription = null;
+    if (!mounted) return;
+
     setState(() {
-      _connectedDeviceId = device.id;
+      _selectedDeviceId = device.id;
+      _connectionState = DeviceConnectionState.connecting;
       _telemetry = null;
-      _status = 'Connecting to ${device.name.isEmpty ? device.id : device.name}…';
+      _status = 'Connecting to ${device.name.isEmpty ? device.id : device.name}...';
     });
     _connectionSubscription = widget.ble.connect(device.id).listen(
       (update) {
         if (!mounted) return;
-        setState(() => _status = 'Connection: ${update.connectionState.name}');
+        setState(() {
+          _connectionState = update.connectionState;
+          _status = switch (update.connectionState) {
+            DeviceConnectionState.connected =>
+              'Connected - subscribing to live telemetry...',
+            DeviceConnectionState.connecting => 'Connecting...',
+            DeviceConnectionState.disconnecting => 'Disconnecting...',
+            DeviceConnectionState.disconnected => 'Disconnected',
+          };
+        });
         if (update.connectionState == DeviceConnectionState.connected) {
           _subscribe(device.id);
         }
       },
       onError: (Object error) {
-        if (mounted) setState(() => _status = 'Connection failed: $error');
+        if (!mounted) return;
+        setState(() {
+          _connectionState = DeviceConnectionState.disconnected;
+          _status = 'Connection failed: $error';
+        });
       },
     );
   }
@@ -79,7 +125,12 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
     _telemetrySubscription?.cancel();
     _telemetrySubscription = widget.ble.telemetry(deviceId).listen(
       (packet) {
-        if (mounted) setState(() => _telemetry = packet);
+        if (mounted) {
+          setState(() {
+            _telemetry = packet;
+            _status = 'Connected - receiving live telemetry';
+          });
+        }
       },
       onError: (Object error) {
         if (mounted) setState(() => _status = 'Telemetry failed: $error');
@@ -97,29 +148,51 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
           Text(_status, style: Theme.of(context).textTheme.bodyLarge),
           const SizedBox(height: 12),
           FilledButton.icon(
-            onPressed: _scan,
+            onPressed: _isConnecting ? null : _scan,
             icon: const Icon(Icons.bluetooth_searching),
             label: const Text('Scan for monitors'),
           ),
           const SizedBox(height: 16),
-          ..._devices.values.map(
-            (device) => Card(
-              child: ListTile(
-                leading: const Icon(Icons.battery_charging_full),
-                title: Text(device.name.isEmpty ? 'Battery Monitor' : device.name),
-                subtitle: Text('RSSI ${device.rssi} dBm'),
-                trailing: FilledButton(
-                  onPressed: () => _connect(device),
-                  child: const Text('Connect'),
-                ),
-              ),
-            ),
-          ),
-          if (_connectedDeviceId != null) ...[
+          ..._devices.values.map((device) => _deviceCard(context, device)),
+          if (_isConnected) ...[
             const SizedBox(height: 16),
             _TelemetryCard(telemetry: _telemetry),
           ],
+          const SizedBox(height: 24),
+          Center(
+            child: Text(
+              AppBuildInfo.label,
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _deviceCard(BuildContext context, DiscoveredDevice device) {
+    final isSelected = device.id == _selectedDeviceId;
+    final isDisabled = isSelected && (_isConnecting || _isConnected);
+    final label = isSelected && _isConnected
+        ? 'Connected'
+        : isSelected && _isConnecting
+        ? 'Connecting...'
+        : 'Connect';
+
+    return Card(
+      child: ListTile(
+        leading: Icon(
+          Icons.battery_charging_full,
+          color: isSelected && _isConnected
+              ? Theme.of(context).colorScheme.primary
+              : null,
+        ),
+        title: Text(device.name.isEmpty ? 'Battery Monitor' : device.name),
+        subtitle: Text('RSSI ${device.rssi} dBm'),
+        trailing: FilledButton(
+          onPressed: isDisabled ? null : () => _connect(device),
+          child: Text(label),
+        ),
       ),
     );
   }
@@ -136,7 +209,7 @@ class _TelemetryCard extends StatelessWidget {
       return const Card(
         child: Padding(
           padding: EdgeInsets.all(16),
-          child: Text('Waiting for live telemetry…'),
+          child: Text('Waiting for live telemetry...'),
         ),
       );
     }
@@ -144,7 +217,7 @@ class _TelemetryCard extends StatelessWidget {
       'Voltage': _format(telemetry!.validVoltageVolts, 'V'),
       'Current': _format(telemetry!.validCurrentAmps, 'A'),
       'Power': _format(telemetry!.validPowerWatts, 'W'),
-      'Temperature': _format(telemetry!.validTemperatureCelsius, '°C'),
+      'Temperature': _format(telemetry!.validTemperatureCelsius, 'deg C'),
       'Session charge': _format(telemetry!.netAmpHours, 'Ah'),
       'Session energy': _format(telemetry!.netWattHours, 'Wh'),
     };
