@@ -52,7 +52,8 @@ class BinaryTelemetryV1 {
     final header = packet[0];
     final packetVersion = header >> 4;
     if (packetVersion != version) {
-      throw FormatException('Unsupported binary telemetry version $packetVersion.');
+      throw FormatException(
+          'Unsupported binary telemetry version $packetVersion.');
     }
 
     final data = ByteData.sublistView(packet);
@@ -69,9 +70,8 @@ class BinaryTelemetryV1 {
   }
 
   static int _int24LE(Uint8List packet, int offset) {
-    var value = packet[offset] |
-        (packet[offset + 1] << 8) |
-        (packet[offset + 2] << 16);
+    var value =
+        packet[offset] | (packet[offset + 1] << 8) | (packet[offset + 2] << 16);
     if ((value & 0x800000) != 0) {
       value |= ~0xffffff;
     }

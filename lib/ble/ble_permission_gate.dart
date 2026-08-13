@@ -32,9 +32,11 @@ class PlatformBlePermissionGate implements BlePermissionGate {
       return BlePermissionState.permanentlyDenied;
     }
 
-    final bluetoothReady = results[Permission.bluetoothScan]?.isGranted == true ||
-        results[Permission.bluetoothConnect]?.isGranted == true;
-    final locationReady = results[Permission.locationWhenInUse]?.isGranted == true;
+    final bluetoothReady =
+        results[Permission.bluetoothScan]?.isGranted == true ||
+            results[Permission.bluetoothConnect]?.isGranted == true;
+    final locationReady =
+        results[Permission.locationWhenInUse]?.isGranted == true;
     return bluetoothReady || locationReady
         ? BlePermissionState.ready
         : BlePermissionState.denied;

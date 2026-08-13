@@ -44,3 +44,18 @@ version is supported. A future incompatible packet uses a new characteristic
 UUID and a new version number; Binary Telemetry v1 remains available for
 existing app releases. Do not identify a monitor by a phone-provided BLE ID:
 iOS provides a privacy-scoped identifier that can change.
+
+## Dashboard Data and controls v1
+
+The app dashboard uses two additional service characteristics, both with fixed
+20-byte little-endian data pages so initial ATT MTU is sufficient:
+
+| UUID suffix | Access | Purpose |
+| --- | --- | --- |
+| `000a-9c65-4d3d-bdd5-8f4c6b2e1000` | Read, Notify | Rotating dashboard pages: extrema (`0x11`), directional energy (`0x12`), state (`0x13`), calibration (`0x14`) and shunt/config (`0x15`). See the firmware repository's `docs/BLE_PROTOCOL.md` for the byte layout. |
+| `000b-9c65-4d3d-bdd5-8f4c6b2e1000` | Write with response | Dashboard controls. Commands: `1` reset extrema, `2` reset session energy, `3` toggle OLED, `4` save calibration, `5` restore default calibration. |
+
+The app subscribes to both the live telemetry and dashboard characteristics.
+Dashboard pages rotate once per 500 ms BLE update, so a newly connected app may
+take up to three seconds to populate all secondary information. Commands are
+applied by the firmware main loop and confirmed by the following data page.
