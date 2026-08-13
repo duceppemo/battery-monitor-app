@@ -1,3 +1,4 @@
+import 'package:battery_monitor_app/ble/battery_monitor_ble.dart';
 import 'package:battery_monitor_app/screens/monitor_dashboard.dart';
 import 'package:flutter/material.dart';
 
@@ -6,7 +7,9 @@ void main() {
 }
 
 class BatteryMonitorApp extends StatelessWidget {
-  const BatteryMonitorApp({super.key});
+  const BatteryMonitorApp({super.key, this.ble});
+
+  final BatteryMonitorBleClient? ble;
 
   @override
   Widget build(BuildContext context) {
@@ -17,7 +20,7 @@ class BatteryMonitorApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
         useMaterial3: true,
       ),
-      home: const MonitorDashboard(),
+      home: MonitorDashboard(ble: ble),
     );
   }
 }

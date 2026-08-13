@@ -6,14 +6,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
 
 class MonitorDashboard extends StatefulWidget {
-  const MonitorDashboard({super.key});
+  MonitorDashboard({super.key, BatteryMonitorBleClient? ble})
+      : ble = ble ?? BatteryMonitorBle();
+
+  final BatteryMonitorBleClient ble;
 
   @override
   State<MonitorDashboard> createState() => _MonitorDashboardState();
 }
 
 class _MonitorDashboardState extends State<MonitorDashboard> {
-  final BatteryMonitorBle _ble = BatteryMonitorBle();
   final Map<String, DiscoveredDevice> _devices = {};
 
   StreamSubscription<DiscoveredDevice>? _scanSubscription;
@@ -37,7 +39,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
       _devices.clear();
       _status = 'Scanning for Battery Monitor…';
     });
-    _scanSubscription = _ble.scan().listen(
+    _scanSubscription = widget.ble.scan().listen(
       (device) {
         if (!mounted) return;
         setState(() {
@@ -59,7 +61,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
       _telemetry = null;
       _status = 'Connecting to ${device.name.isEmpty ? device.id : device.name}…';
     });
-    _connectionSubscription = _ble.connect(device.id).listen(
+    _connectionSubscription = widget.ble.connect(device.id).listen(
       (update) {
         if (!mounted) return;
         setState(() => _status = 'Connection: ${update.connectionState.name}');
@@ -75,7 +77,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
 
   void _subscribe(String deviceId) {
     _telemetrySubscription?.cancel();
-    _telemetrySubscription = _ble.telemetry(deviceId).listen(
+    _telemetrySubscription = widget.ble.telemetry(deviceId).listen(
       (packet) {
         if (mounted) setState(() => _telemetry = packet);
       },
