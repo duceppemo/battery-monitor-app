@@ -21,6 +21,7 @@ class BatteryMonitorBle {
     return _client.connectToAdvertisingDevice(
       id: deviceId,
       withServices: [BleIds.service],
+      prescanDuration: const Duration(seconds: 3),
       connectionTimeout: const Duration(seconds: 10),
     );
   }
