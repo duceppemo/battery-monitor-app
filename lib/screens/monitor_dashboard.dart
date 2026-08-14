@@ -63,14 +63,14 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
   Timer? _demoTimer;
   bool _demoMode = false;
   int _demoSequence = 0;
-  String _updateStatus = 'Check GitHub Releases for updates';
+  String _appUpdateStatus = 'Check for a newer Battery Monitor app release.';
   GithubRelease? _firmwareRelease;
   Uint8List? _downloadedFirmware;
   String? _downloadedFirmwareVersion;
   bool _firmwareTransferInProgress = false;
   double _firmwareTransferProgress = 0;
   String _firmwareTransferStatus =
-      'Download a published firmware release, then transfer it over BLE.';
+      'Connect to a monitor to read its firmware version before checking for updates.';
 
   bool get _isConnected => _connectionState == DeviceConnectionState.connected;
   bool get _isConnecting =>
@@ -92,6 +92,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
         installed != null &&
         GithubReleaseChecker.isNewer(release.version, installed);
   }
+
   bool get _downloadedFirmwareCanInstall {
     final downloaded = _downloadedFirmwareVersion;
     final installed = _connectedFirmwareVersion;
@@ -106,14 +107,6 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
     _downloadedFirmware = null;
     _downloadedFirmwareVersion = null;
     if (status != null) _firmwareTransferStatus = status;
-  }
-  String get _monitorFirmwareLabel {
-    final version = RegExp(r'FW=([^;]+)')
-        .firstMatch(_deviceInfo ?? '')
-        ?.group(1);
-    return version == null
-        ? 'Current monitor firmware: connect to read'
-        : 'Current monitor firmware: v$version';
   }
 
   @override
@@ -157,7 +150,8 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
     if (!mounted) return;
     setState(() {
       _clearDownloadedFirmware(
-        status: 'Scanning. Download firmware again after connecting to a monitor.',
+        status:
+            'Scanning. Download firmware again after connecting to a monitor.',
       );
       _devices.clear();
       _selectedDeviceId = null;
@@ -179,44 +173,62 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
     );
   }
 
-  Future<void> _checkUpdates() async {
-    setState(() => _updateStatus = 'Checking GitHub Releases...');
+  Future<void> _checkAppUpdates() async {
+    setState(() => _appUpdateStatus = 'Checking for a newer app release...');
     try {
-      final releases = await Future.wait([
-        _releaseChecker.latestAppRelease(),
-        _releaseChecker.latestFirmwareRelease(),
-      ]);
-      final appRelease = releases[0];
-      final firmwareRelease = releases[1];
-      final firmwareVersion =
-          RegExp(r'FW=([^;]+)').firstMatch(_deviceInfo ?? '')?.group(1);
-      final appText = appRelease == null
+      final release = await _releaseChecker.latestAppRelease();
+      final status = release == null
           ? 'App: no release published yet'
-          : GithubReleaseChecker.isNewer(
-                  appRelease.version, AppBuildInfo.version)
-              ? 'App update: v${appRelease.version} available'
-              : 'App: up to date';
-      final firmwareText = firmwareRelease == null
-          ? 'Firmware: no release published yet'
-          : firmwareVersion == null
-              ? 'Firmware release: v${firmwareRelease.version} (connect monitor to compare)'
+          : GithubReleaseChecker.isNewer(release.version, AppBuildInfo.version)
+              ? 'App update: v${release.version} available'
               : GithubReleaseChecker.isNewer(
-                      firmwareRelease.version, firmwareVersion)
-                  ? 'Firmware update available: v$firmwareVersion → v${firmwareRelease.version}'
-                  : 'Firmware: v$firmwareVersion is up to date';
-      if (mounted) {
-        setState(() {
-          _firmwareRelease = firmwareRelease;
-          _updateStatus = '$appText\n$firmwareText';
-          if (firmwareRelease?.firmwareAsset == null && firmwareRelease != null) {
-            _firmwareTransferStatus =
-                'Firmware release v${firmwareRelease.version} has no OTA .bin asset.';
-          }
-        });
-      }
+                  AppBuildInfo.version,
+                  release.version,
+                )
+                  ? 'Installed app v${AppBuildInfo.version} is newer than the latest published v${release.version}'
+                  : 'App v${AppBuildInfo.version} is up to date';
+      if (mounted) setState(() => _appUpdateStatus = status);
     } on Object catch (error) {
       if (mounted) {
-        setState(() => _updateStatus = 'Update check failed: $error');
+        setState(() => _appUpdateStatus =
+            'App update check failed: ${GithubReleaseChecker.describeRequestError(error)}');
+      }
+    }
+  }
+
+  Future<void> _checkFirmwareUpdates() async {
+    final installed = _connectedFirmwareVersion;
+    if (!_canControl || installed == null) {
+      setState(() => _firmwareTransferStatus =
+          'Connect to a monitor and wait for its firmware version before checking for updates.');
+      return;
+    }
+
+    setState(() => _firmwareTransferStatus =
+        'Checking for a newer monitor firmware release...');
+    try {
+      final release = await _releaseChecker.latestFirmwareRelease();
+      if (!mounted) return;
+      setState(() {
+        _firmwareRelease = release;
+        if (release == null) {
+          _firmwareTransferStatus =
+              'No monitor firmware release is published yet.';
+        } else if (release.firmwareAsset == null) {
+          _firmwareTransferStatus =
+              'Firmware release v${release.version} has no installable OTA .bin asset.';
+        } else if (GithubReleaseChecker.isNewer(release.version, installed)) {
+          _firmwareTransferStatus =
+              'Firmware update available: v$installed → v${release.version}. Download it to prepare BLE installation.';
+        } else {
+          _firmwareTransferStatus =
+              'Monitor firmware v$installed is up to date.';
+        }
+      });
+    } on Object catch (error) {
+      if (mounted) {
+        setState(() => _firmwareTransferStatus =
+            'Firmware update check failed: ${GithubReleaseChecker.describeRequestError(error)}');
       }
     }
   }
@@ -256,7 +268,8 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
       });
     } on Object catch (error) {
       if (mounted) {
-        setState(() => _firmwareTransferStatus = 'Download failed: $error');
+        setState(() => _firmwareTransferStatus =
+            'Download failed: ${GithubReleaseChecker.describeRequestError(error)}');
       }
     }
   }
@@ -324,7 +337,8 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
       }
     } on Object catch (error) {
       if (mounted) {
-        setState(() => _firmwareTransferStatus = 'Firmware transfer failed: $error');
+        setState(
+            () => _firmwareTransferStatus = 'Firmware transfer failed: $error');
       }
     } finally {
       if (mounted) setState(() => _firmwareTransferInProgress = false);
@@ -407,7 +421,8 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
 
     setState(() {
       _clearDownloadedFirmware(
-        status: 'Disconnected. Download firmware again after connecting to a monitor.',
+        status:
+            'Disconnected. Download firmware again after connecting to a monitor.',
       );
       _selectedDeviceId = device.id;
       _connectionState = DeviceConnectionState.connecting;
@@ -467,7 +482,8 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
     if (!mounted) return;
     setState(() {
       _clearDownloadedFirmware(
-        status: 'Disconnected. Download firmware again after connecting to a monitor.',
+        status:
+            'Disconnected. Download firmware again after connecting to a monitor.',
       );
       _connectionState = DeviceConnectionState.disconnected;
       _selectedDeviceId = null;
@@ -685,7 +701,8 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
     }
     final gain = current * (resistanceMilliOhms / 1000) / adjustedShuntVolts;
     if (!gain.isFinite || gain < 0.5 || gain > 1.5) {
-      _showMessage('Calculated gain is outside the permitted 0.5 to 1.5 range.');
+      _showMessage(
+          'Calculated gain is outside the permitted 0.5 to 1.5 range.');
       return;
     }
     _gainController.text = gain.toStringAsFixed(6);
@@ -906,9 +923,9 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
         leading: Icon(isShowingMonitor
             ? Icons.bluetooth_connected
             : Icons.bluetooth_searching),
-        title: const Text('Connection & updates'),
+        title: const Text('Connection & app update'),
         subtitle: Text(isShowingMonitor
-            ? 'Connected — tap to scan, switch monitor, or check releases'
+            ? 'Connected — tap to scan, switch monitor, or check for an app update'
             : 'Scan for a monitor or start the demo'),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         children: [
@@ -930,22 +947,15 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
                     Text(_demoMode ? 'Stop demo monitor' : 'Try demo monitor'),
               ),
               OutlinedButton.icon(
-                onPressed: _checkUpdates,
+                onPressed: _checkAppUpdates,
                 icon: const Icon(Icons.system_update_outlined),
-                label: const Text('Check for updates'),
+                label: const Text('Check app update'),
               ),
             ],
           ),
           Padding(
             padding: const EdgeInsets.only(top: 10),
-            child: Text(
-              _monitorFirmwareLabel,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(_updateStatus,
+            child: Text(_appUpdateStatus,
                 style: Theme.of(context).textTheme.bodySmall),
           ),
           ..._devices.values.map((device) => _deviceCard(context, device)),
@@ -974,13 +984,14 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
         subtitle: Text('RSSI ${device.rssi} dBm'),
         trailing: isDisconnect
             ? OutlinedButton(
-          onPressed: _disconnect,
-          child: const Text('Disconnect'),
-        )
+                onPressed: _disconnect,
+                child: const Text('Disconnect'),
+              )
             : FilledButton(
-          onPressed: isSelected && _isConnecting ? null : () => _connect(device),
-          child: Text(label),
-        ),
+                onPressed:
+                    isSelected && _isConnecting ? null : () => _connect(device),
+                child: Text(label),
+              ),
       ),
     );
   }
@@ -1011,13 +1022,13 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
               _MetricCard(
                   'Current',
                   _format(_telemetry!.validCurrentAmps, 'A'),
-                  _minMax(_dashboard.currentMinAmps,
-                      _dashboard.currentMaxAmps, 'A')),
+                  _minMax(_dashboard.currentMinAmps, _dashboard.currentMaxAmps,
+                      'A')),
               _MetricCard(
                   'Power',
                   _format(_telemetry!.validPowerWatts, 'W'),
-                  _minMax(_dashboard.powerMinWatts,
-                      _dashboard.powerMaxWatts, 'W')),
+                  _minMax(
+                      _dashboard.powerMinWatts, _dashboard.powerMaxWatts, 'W')),
             ],
           ),
           const SizedBox(height: 12),
@@ -1306,11 +1317,14 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
     final firmware = _downloadedFirmware;
     final supported = _supportsBleOta;
     final installed = _connectedFirmwareVersion;
+    final canCheckFirmware =
+        _canControl && installed != null && !_firmwareTransferInProgress;
     final canDownloadUpdate = !_firmwareTransferInProgress &&
         firmware == null &&
-        _firmwareUpdateAvailable;
+        _firmwareUpdateAvailable &&
+        release?.firmwareAsset != null;
     return _SectionCard(
-      title: 'Firmware update',
+      title: 'Monitor firmware update',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1330,16 +1344,22 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
             runSpacing: 8,
             children: [
               OutlinedButton.icon(
-                onPressed: canDownloadUpdate ? _downloadFirmware : null,
+                onPressed: firmware != null
+                    ? null
+                    : canDownloadUpdate
+                        ? _downloadFirmware
+                        : canCheckFirmware
+                            ? _checkFirmwareUpdates
+                            : null,
                 icon: const Icon(Icons.download_outlined),
                 label: Text(firmware == null
                     ? release == null
-                        ? 'Check for updates first'
+                        ? 'Check for updates'
                         : _firmwareUpdateAvailable
                             ? 'Download v${release.version}'
                             : installed == null
-                                ? 'Connect to compare'
-                                : 'Firmware up to date'
+                                ? 'Connect to check updates'
+                                : 'Check for updates'
                     : 'v${_downloadedFirmwareVersion ?? release?.version ?? '?'} downloaded'),
               ),
               FilledButton.icon(
@@ -1368,11 +1388,11 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
   }
 
   String _firmwareUpdateSummary(GithubRelease? release, String? installed) {
-    if (release == null) {
-      return 'Check GitHub Releases to find the latest installable firmware.';
-    }
     if (installed == null) {
-      return 'Release v${release.version}. Connect a monitor to compare versions.';
+      return 'Connect a monitor to read its installed firmware version.';
+    }
+    if (release == null) {
+      return 'Monitor firmware v$installed. Check for updates to compare versions.';
     }
     return _firmwareUpdateAvailable
         ? 'Update available: v$installed → v${release.version}'

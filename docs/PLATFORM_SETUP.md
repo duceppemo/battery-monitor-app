@@ -73,7 +73,11 @@ behaviour independently on both platforms.
 5. On firmware 0.5.1+, issue a reset, OLED, calibration or alarm command and
    verify the request-ID-matched result instead of assuming that a BLE write
    response means the action was applied.
-6. Test a release asset by Web OTA and BLE OTA separately; a verified BLE
+6. Verify **Check app update** reports only the public app release. After
+   connecting and reading the monitor version, verify **Check for updates** in
+   the monitor-firmware card compares and discovers the public firmware
+   release.
+7. Test a release asset by Web OTA and BLE OTA separately; a verified BLE
    update should report success before the monitor restarts and reconnects.
-7. Repeat scanning, reconnecting and live notifications on an Android phone
+8. Repeat scanning, reconnecting and live notifications on an Android phone
    and an iPhone before relying on the app during a measurement session.
