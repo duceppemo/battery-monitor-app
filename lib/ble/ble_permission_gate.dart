@@ -32,8 +32,10 @@ class PlatformBlePermissionGate implements BlePermissionGate {
       return BlePermissionState.permanentlyDenied;
     }
 
+    // Android 12+ requires both Nearby devices permissions. Treating either
+    // one as enough led to a misleading ready state after a partial grant.
     final bluetoothReady =
-        results[Permission.bluetoothScan]?.isGranted == true ||
+        results[Permission.bluetoothScan]?.isGranted == true &&
             results[Permission.bluetoothConnect]?.isGranted == true;
     final locationReady =
         results[Permission.locationWhenInUse]?.isGranted == true;

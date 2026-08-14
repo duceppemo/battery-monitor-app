@@ -1,3 +1,12 @@
+import java.util.Properties
+
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+val hasReleaseSigning = keystorePropertiesFile.exists()
+if (hasReleaseSigning) {
+    keystorePropertiesFile.inputStream().use(keystoreProperties::load)
+}
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -29,12 +38,32 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            if (hasReleaseSigning) {
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+            } else {
+                // This keeps ordinary debug development usable. A Release task
+                // is rejected below before this fallback can create an APK.
+                initWith(getByName("debug"))
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
+    }
+}
+
+gradle.taskGraph.whenReady {
+    val isReleaseTask = allTasks.any { it.name.contains("Release", ignoreCase = true) }
+    check(hasReleaseSigning || !isReleaseTask) {
+        "Missing android/key.properties. Configure the release upload keystore before building a release APK."
     }
 }
 

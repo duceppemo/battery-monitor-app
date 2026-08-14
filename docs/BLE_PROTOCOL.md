@@ -1,5 +1,22 @@
 # BLE protocol
 
+The app supports the firmware's Binary Telemetry v1, Dashboard Data v1 and
+Dashboard Control v1 contracts below. Firmware 0.5.0+ advertises `ota1` in
+Device Information; firmware 0.5.1+ additionally advertises `control1` for
+acknowledged controls.
+
+## Firmware Transfer v1
+
+- Write-with-response: `7d9f000d-9c65-4d3d-bdd5-8f4c6b2e1000`
+- Read/notify status: `7d9f000e-9c65-4d3d-bdd5-8f4c6b2e1000`
+
+The app starts with `0xA0 + u32 image size + u32 IEEE CRC-32`, sends `0xA1 +
+u32 offset + data` frames in order, and finishes with `0xA2`. `0xA3` aborts.
+The status packet is 12 bytes: protocol version, state, received/expected byte
+counts, error code and reserved byte. State `2` means the monitor verified the
+complete image and the monitor waits two seconds before rebooting. This transfer checks integrity, not the
+publisher's identity; use only a trusted GitHub Release asset.
+
 The monitor is a BLE GATT peripheral named `BatteryMonitor`. It exposes the
 custom service:
 
@@ -15,8 +32,8 @@ Telemetry characteristic:
 7d9f0009-9c65-4d3d-bdd5-8f4c6b2e1000
 ```
 
-It supports `Read` and `Notify`. Firmware updates it after each completed
-measurement pass (currently every 500 ms). It is a fixed 20-byte little-endian
+It supports `Read` and `Notify`. Firmware publishes it on the one-second BLE
+cadence after completed measurements. It is a fixed 20-byte little-endian
 packet, deliberately small enough to fit in the initial BLE ATT notification
 payload. The app must not rely on MTU negotiation for live telemetry.
 
@@ -47,15 +64,27 @@ iOS provides a privacy-scoped identifier that can change.
 
 ## Dashboard Data and controls v1
 
-The app dashboard uses two additional service characteristics, both with fixed
-20-byte little-endian data pages so initial ATT MTU is sufficient:
+The app dashboard uses three additional service characteristics. Dashboard data
+uses fixed 20-byte little-endian pages so the initial ATT MTU is sufficient:
 
 | UUID suffix | Access | Purpose |
 | --- | --- | --- |
-| `000a-9c65-4d3d-bdd5-8f4c6b2e1000` | Read, Notify | Rotating dashboard pages: extrema (`0x11`), directional energy (`0x12`), state (`0x13`), calibration (`0x14`) and shunt/config (`0x15`). See the firmware repository's `docs/BLE_PROTOCOL.md` for the byte layout. |
-| `000b-9c65-4d3d-bdd5-8f4c6b2e1000` | Write with response | Dashboard controls. Commands: `1` reset extrema, `2` reset session energy, `3` toggle OLED, `4` save calibration, `5` restore default calibration. |
+| `000a-9c65-4d3d-bdd5-8f4c6b2e1000` | Read, Notify | Rotating dashboard pages: extrema (`0x11`), directional energy (`0x12`), state (`0x13`), calibration (`0x14`), shunt/config (`0x15`) and alarms (`0x16`). See the firmware repository's `docs/BLE_PROTOCOL.md` for the byte layout. |
+| `000b-9c65-4d3d-bdd5-8f4c6b2e1000` | Write with response | Dashboard controls. Commands: `1` reset extrema, `2` reset session energy, `3` toggle OLED, `4` save calibration, `5` restore default calibration, `6` save alarms. The app appends a request ID. |
+| `000f-9c65-4d3d-bdd5-8f4c6b2e1000` | Read, Notify | Control result: version, command, request ID and applied/rejected/failed result. |
 
 The app subscribes to both the live telemetry and dashboard characteristics.
-Dashboard pages rotate once per 500 ms BLE update, so a newly connected app may
-take up to three seconds to populate all secondary information. Commands are
-applied by the firmware main loop and confirmed by the following data page.
+Dashboard pages rotate once per one-second BLE update, so a newly connected app
+may take up to six seconds to populate all secondary information. Commands are
+applied by the firmware main loop and confirmed by the matching Control Result
+notification.
+
+Control Result is a fixed six-byte packet: protocol version (`1`), command,
+`u16` request ID, result (`0` idle, `1` applied, `2` rejected because another
+command is pending, `3` failed to persist), and one reserved byte. A write
+response only confirms receipt by GATT; the app treats the matching result as
+the command outcome.
+
+The readable device-information characteristic is
+`000c-9c65-4d3d-bdd5-8f4c6b2e1000`. Its semicolon-separated UTF-8 value
+contains the firmware version, hardware revision and supported BLE contracts.

@@ -3,7 +3,7 @@ import 'dart:typed_data';
 /// Compact 20-byte dashboard pages from the firmware's dashboard BLE
 /// characteristic.  Pages are intentionally independent so they remain safe
 /// on the baseline BLE ATT payload size.
-enum DashboardPacketType { extrema, energy, state, calibration, shunt }
+enum DashboardPacketType { extrema, energy, state, calibration, shunt, alarms }
 
 class DashboardPacketV1 {
   DashboardPacketV1._(this.type, this._packet);
@@ -14,6 +14,7 @@ class DashboardPacketV1 {
   static const _state = 0x13;
   static const _calibration = 0x14;
   static const _shunt = 0x15;
+  static const _alarms = 0x16;
 
   final DashboardPacketType type;
   final Uint8List _packet;
@@ -31,6 +32,7 @@ class DashboardPacketV1 {
       _state => DashboardPacketType.state,
       _calibration => DashboardPacketType.calibration,
       _shunt => DashboardPacketType.shunt,
+      _alarms => DashboardPacketType.alarms,
       final value =>
         throw FormatException('Unknown dashboard packet type $value.'),
     };
@@ -86,10 +88,18 @@ class DashboardPacketV1 {
   double get shuntTemperatureMinCelsius => _data.getInt8(17).toDouble();
   double get shuntTemperatureMaxCelsius => _data.getInt8(18).toDouble();
   int get shuntFlags => _packet[19];
+
+  int get alarmEnabledFlags => _packet[1];
+  int get alarmActiveFlags => _packet[2];
+  double get alarmLowVoltage => _data.getUint16(3, Endian.little) / 1000.0;
+  double get alarmHighVoltage => _data.getUint16(5, Endian.little) / 1000.0;
+  double get alarmMaxCurrent => _int24(7) / 1000.0;
+  double get alarmMaxTemperature => _data.getInt32(10, Endian.little) / 10.0;
 }
 
 /// The latest value of each independently rotating dashboard page.
 class DashboardSnapshot {
+  bool hasState = false;
   double? voltageMinVolts;
   double? voltageMaxVolts;
   double? currentMinAmps;
@@ -125,6 +135,12 @@ class DashboardSnapshot {
   int? configRegister;
   int? adcConfigRegister;
   int? averages;
+  int? deviceAlarmEnabledFlags;
+  int? deviceAlarmActiveFlags;
+  double? deviceAlarmLowVoltage;
+  double? deviceAlarmHighVoltage;
+  double? deviceAlarmMaxCurrent;
+  double? deviceAlarmMaxTemperature;
 
   void update(DashboardPacketV1 packet) {
     switch (packet.type) {
@@ -154,6 +170,7 @@ class DashboardSnapshot {
         chargedWattHours = packet.chargedWattHours;
         break;
       case DashboardPacketType.state:
+        hasState = true;
         final flags = packet.stateFlags;
         sensorOk = (flags & 1) != 0;
         displayOn = (flags & 2) != 0;
@@ -190,6 +207,14 @@ class DashboardSnapshot {
           temperatureMinCelsius = packet.shuntTemperatureMinCelsius;
           temperatureMaxCelsius = packet.shuntTemperatureMaxCelsius;
         }
+        break;
+      case DashboardPacketType.alarms:
+        deviceAlarmEnabledFlags = packet.alarmEnabledFlags;
+        deviceAlarmActiveFlags = packet.alarmActiveFlags;
+        deviceAlarmLowVoltage = packet.alarmLowVoltage;
+        deviceAlarmHighVoltage = packet.alarmHighVoltage;
+        deviceAlarmMaxCurrent = packet.alarmMaxCurrent;
+        deviceAlarmMaxTemperature = packet.alarmMaxTemperature;
         break;
     }
   }

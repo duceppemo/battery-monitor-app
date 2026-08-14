@@ -1,16 +1,30 @@
 # Platform setup
 
-Generate the Android and iOS wrappers with Flutter before running the app:
+The Android and iOS wrappers are already checked into this repository. Fetch
+packages before running the app:
 
 ```powershell
-flutter create --platforms=android,ios .
 flutter pub get
 ```
 
-This repository intentionally does not contain signing material. Review the
-generated files and use the following settings before testing on hardware.
+This repository intentionally does not contain signing material. Use the
+following settings before testing on hardware.
 
 ## Android
+
+### Release signing
+
+For a local release, copy `android/key.properties.example` to
+`android/key.properties` and set its values for a private upload keystore. Both
+files are intentionally ignored by Git except for the example. The GitHub
+release workflow expects these repository secrets instead:
+
+- `ANDROID_KEYSTORE_BASE64` — Base64 form of the upload `.jks` file.
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_PASSWORD`
+
+Back up the upload keystore and its passwords somewhere private. Losing them
+prevents future Android updates from being installed over a published app.
 
 Add these permissions to `android/app/src/main/AndroidManifest.xml`:
 
@@ -53,8 +67,13 @@ behaviour independently on both platforms.
 1. Confirm the phone sees `BatteryMonitor` while the firmware is advertising.
 2. Confirm the app filters by the Battery Monitor service, then connects.
 3. Subscribe to Binary Telemetry v1 and verify a new 20-byte packet about
-   every 500 ms.
+   every second.
 4. Turn the monitor and phone Bluetooth off/on once each; verify the UI shows
    the disconnected/stale state rather than frozen values.
-5. Repeat on an Android phone and an iPhone before relying on the app during a
-   measurement session.
+5. On firmware 0.5.1+, issue a reset, OLED, calibration or alarm command and
+   verify the request-ID-matched result instead of assuming that a BLE write
+   response means the action was applied.
+6. Test a release asset by Web OTA and BLE OTA separately; a verified BLE
+   update should report success before the monitor restarts and reconnects.
+7. Repeat scanning, reconnecting and live notifications on an Android phone
+   and an iPhone before relying on the app during a measurement session.

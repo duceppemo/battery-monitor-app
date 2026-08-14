@@ -69,6 +69,30 @@ class BinaryTelemetryV1 {
     );
   }
 
+  /// Local-only data source for exercising the dashboard without a monitor.
+  factory BinaryTelemetryV1.simulated({
+    required int sequence,
+    required double voltageVolts,
+    required double currentAmps,
+    required double powerWatts,
+    required double temperatureCelsius,
+    required double netAmpHours,
+    required double netWattHours,
+  }) =>
+      BinaryTelemetryV1._(
+        flags: voltageValidFlag |
+            currentValidFlag |
+            powerValidFlag |
+            temperatureValidFlag,
+        sequence: sequence,
+        voltageVolts: voltageVolts,
+        currentAmps: currentAmps,
+        powerWatts: powerWatts,
+        temperatureCelsius: temperatureCelsius,
+        netAmpHours: netAmpHours,
+        netWattHours: netWattHours,
+      );
+
   static int _int24LE(Uint8List packet, int offset) {
     var value =
         packet[offset] | (packet[offset + 1] << 8) | (packet[offset + 2] << 16);
