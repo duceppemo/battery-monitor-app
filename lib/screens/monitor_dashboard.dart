@@ -10,6 +10,7 @@ import 'package:battery_monitor_app/ble/ble_permission_gate.dart';
 import 'package:battery_monitor_app/models/binary_telemetry_v1.dart';
 import 'package:battery_monitor_app/models/dashboard_packet_v1.dart';
 import 'package:battery_monitor_app/models/session_log.dart';
+import 'package:battery_monitor_app/models/telemetry_presentation_filter.dart';
 import 'package:battery_monitor_app/updates/github_release_checker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
@@ -34,6 +35,8 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
   final Map<String, DiscoveredDevice> _devices = {};
   DashboardSnapshot _dashboard = DashboardSnapshot();
   final SessionLog _sessionLog = SessionLog();
+  final TelemetryPresentationFilter _presentationFilter =
+      TelemetryPresentationFilter();
   final AlarmSettingsStore _alarmStore = AlarmSettingsStore();
   final GithubReleaseChecker _releaseChecker = GithubReleaseChecker();
   AlarmSettings _alarmSettings = const AlarmSettings();
@@ -54,6 +57,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
   StreamSubscription<BinaryTelemetryV1>? _telemetrySubscription;
   StreamSubscription<DashboardPacketV1>? _dashboardSubscription;
   BinaryTelemetryV1? _telemetry;
+  PresentedTelemetry? _presentedTelemetry;
   String _status = 'Ready to scan';
   DeviceConnectionState? _connectionState;
   String? _selectedDeviceId;
@@ -157,6 +161,8 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
       _selectedDeviceId = null;
       _connectionState = null;
       _telemetry = null;
+      _presentedTelemetry = null;
+      _presentationFilter.reset();
       _status = 'Scanning for Battery Monitor...';
     });
     _scanSubscription = widget.ble.scan().listen(
@@ -350,6 +356,8 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
     setState(() {
       _demoMode = true;
       _telemetry = null;
+      _presentedTelemetry = null;
+      _presentationFilter.reset();
       _dashboard = DashboardSnapshot()
         ..hasState = true
         ..sensorOk = true
@@ -379,6 +387,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
       );
       setState(() {
         _telemetry = telemetry;
+        _presentedTelemetry = _presentationFilter.update(telemetry);
         _sessionLog.add(telemetry);
         _dashboard
           ..voltageMinVolts = _min(_dashboard.voltageMinVolts, voltage)
@@ -427,6 +436,8 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
       _selectedDeviceId = device.id;
       _connectionState = DeviceConnectionState.connecting;
       _telemetry = null;
+      _presentedTelemetry = null;
+      _presentationFilter.reset();
       _dashboard = DashboardSnapshot();
       _deviceInfo = null;
       _calibrationFieldsInitialized = false;
@@ -488,6 +499,8 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
       _connectionState = DeviceConnectionState.disconnected;
       _selectedDeviceId = null;
       _telemetry = null;
+      _presentedTelemetry = null;
+      _presentationFilter.reset();
       _deviceInfo = null;
       _dashboard = DashboardSnapshot();
       _status = 'Disconnected — scan to connect to a monitor.';
@@ -605,6 +618,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
         if (mounted) {
           setState(() {
             _telemetry = packet;
+            _presentedTelemetry = _presentationFilter.update(packet);
             _sessionLog.add(packet);
             _alarmMessages = _alarmSettings.evaluate(packet, _dashboard);
             _status = 'Connected - receiving live telemetry';
@@ -837,16 +851,130 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
         .showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> _startTestSession() async {
+    final name = TextEditingController();
+    final chemistry = TextEditingController();
+    final capacity = TextEditingController();
+    final notes = TextEditingController();
+    final metadata = await showDialog<TestSessionMetadata>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Start new test session'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: name,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: 'Test name'),
+              ),
+              TextField(
+                controller: chemistry,
+                decoration:
+                    const InputDecoration(labelText: 'Battery chemistry'),
+              ),
+              TextField(
+                controller: capacity,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                    labelText: 'Rated capacity (Ah, optional)'),
+              ),
+              TextField(
+                controller: notes,
+                maxLines: 3,
+                decoration: const InputDecoration(labelText: 'Notes'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(
+              dialogContext,
+              TestSessionMetadata(
+                name: name.text,
+                chemistry: chemistry.text,
+                ratedCapacityAh: double.tryParse(capacity.text.trim()),
+                notes: notes.text,
+              ),
+            ),
+            child: const Text('Start'),
+          ),
+        ],
+      ),
+    );
+    name.dispose();
+    chemistry.dispose();
+    capacity.dispose();
+    notes.dispose();
+    if (metadata == null || !mounted) return;
+    setState(() => _sessionLog.start(metadata));
+    _showMessage('Test session "${metadata.displayName}" started.');
+  }
+
+  void _finishTestSession() {
+    if (_sessionLog.entries.isEmpty) {
+      _showMessage('Collect live telemetry before finishing a test session.');
+      return;
+    }
+    final summary = _sessionLog.finish();
+    setState(() {});
+    _showTestSessionSummary(summary);
+  }
+
+  Future<void> _showTestSessionSummary(TestSessionSummary summary) =>
+      showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text('${summary.metadata.displayName} summary'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _valueRow('Duration', _formatDuration(summary.duration)),
+                _valueRow('Samples', '${summary.sampleCount}'),
+                _valueRow(
+                    'Voltage',
+                    '${_format(summary.voltageStartVolts, 'V')} → '
+                        '${_format(summary.voltageEndVolts, 'V')}'),
+                _valueRow(
+                    'Current range',
+                    _minMax(
+                        summary.currentMinAmps, summary.currentMaxAmps, 'A')),
+                _valueRow('Net charge', _format(summary.netAmpHours, 'Ah')),
+                _valueRow('Net energy', _format(summary.netWattHours, 'Wh')),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+
   Future<void> _shareSessionLog() async {
     if (_sessionLog.entries.isEmpty) {
       _showMessage('Collect live telemetry before exporting a CSV file.');
       return;
     }
-    final fileName = 'battery-monitor-session.csv';
+    final stem = _sessionLog.metadata.displayName
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+        .replaceAll(RegExp(r'^-+|-+$'), '');
+    final fileName = 'battery-monitor-${stem.isEmpty ? 'session' : stem}.csv';
     final csv = _sessionLog.toCsv(deviceInfo: _deviceInfo);
     try {
       await SharePlus.instance.share(ShareParams(
-        title: 'Battery Monitor session log',
+        title: '${_sessionLog.metadata.displayName} session log',
         files: [
           XFile.fromData(
             utf8.encode(csv),
@@ -1005,28 +1133,52 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
         ),
       );
     }
+    final shown =
+        _presentedTelemetry ?? _presentationFilter.update(_telemetry!);
     return _SectionCard(
       title: 'Live values',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text(
+            'Display filter: ${_presentationFilter.mode.label}. Raw values remain in alarms, history, CSV, and Ah/Wh.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8),
+          SegmentedButton<TelemetryFilterMode>(
+            segments: TelemetryFilterMode.values
+                .map((mode) => ButtonSegment<TelemetryFilterMode>(
+                      value: mode,
+                      label: Text(mode.label),
+                    ))
+                .toList(growable: false),
+            selected: {_presentationFilter.mode},
+            onSelectionChanged: (selected) {
+              final mode = selected.single;
+              setState(() {
+                _presentationFilter.select(mode);
+                _presentedTelemetry = _presentationFilter.update(_telemetry!);
+              });
+            },
+          ),
+          const SizedBox(height: 12),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
               _MetricCard(
                   'Voltage',
-                  _format(_telemetry!.validVoltageVolts, 'V'),
+                  _format(shown.voltageVolts, 'V'),
                   _minMax(_dashboard.voltageMinVolts,
                       _dashboard.voltageMaxVolts, 'V')),
               _MetricCard(
                   'Current',
-                  _format(_telemetry!.validCurrentAmps, 'A'),
+                  _format(shown.currentAmps, 'A'),
                   _minMax(_dashboard.currentMinAmps, _dashboard.currentMaxAmps,
                       'A')),
               _MetricCard(
                   'Power',
-                  _format(_telemetry!.validPowerWatts, 'W'),
+                  _format(shown.powerWatts, 'W'),
                   _minMax(
                       _dashboard.powerMinWatts, _dashboard.powerMaxWatts, 'W')),
             ],
@@ -1214,11 +1366,32 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
 
   Widget _logSection(BuildContext context) {
     final entries = _sessionLog.entries;
+    final summary = _sessionLog.summary;
     return _SectionCard(
-      title: 'App session log',
+      title: 'Test session',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text(
+            _sessionLog.isRecording
+                ? '${_sessionLog.metadata.displayName} is recording locally.'
+                : '${_sessionLog.metadata.displayName} is complete.',
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          if (_sessionLog.metadata.chemistry.trim().isNotEmpty ||
+              _sessionLog.metadata.ratedCapacityAh != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              [
+                if (_sessionLog.metadata.chemistry.trim().isNotEmpty)
+                  _sessionLog.metadata.chemistry.trim(),
+                if (_sessionLog.metadata.ratedCapacityAh != null)
+                  '${_sessionLog.metadata.ratedCapacityAh!.toStringAsFixed(3)} Ah rated',
+              ].join(' · '),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+          const SizedBox(height: 8),
           Text(
             '${entries.length} samples stored locally (up to 7,200). '
             'Charts show the latest 120 samples.',
@@ -1244,10 +1417,28 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
             values: entries.map((entry) => entry.powerWatts).toList(),
           ),
           const SizedBox(height: 8),
+          if (entries.isNotEmpty) ...[
+            _valueRow('Captured duration', _formatDuration(summary.duration)),
+            _valueRow('Captured net',
+                '${_format(summary.netAmpHours, 'Ah')} / ${_format(summary.netWattHours, 'Wh')}'),
+            const SizedBox(height: 8),
+          ],
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
+              FilledButton.icon(
+                onPressed: _startTestSession,
+                icon: const Icon(Icons.play_arrow),
+                label: const Text('Start new test'),
+              ),
+              OutlinedButton.icon(
+                onPressed: entries.isEmpty || !_sessionLog.isRecording
+                    ? null
+                    : _finishTestSession,
+                icon: const Icon(Icons.stop_circle_outlined),
+                label: const Text('Finish test'),
+              ),
               OutlinedButton.icon(
                 onPressed: entries.isEmpty ? null : _shareSessionLog,
                 icon: const Icon(Icons.ios_share),
@@ -1542,9 +1733,16 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
 
   static String _formatUptime(int? seconds) {
     if (seconds == null) return 'Waiting for status';
-    final duration = Duration(seconds: seconds);
+    return _formatDuration(Duration(seconds: seconds));
+  }
+
+  static String _formatDuration(Duration duration) {
     final hours = duration.inHours;
-    return '${hours}h ${duration.inMinutes.remainder(60)}m';
+    final minutes = duration.inMinutes.remainder(60);
+    final seconds = duration.inSeconds.remainder(60);
+    if (hours > 0) return '${hours}h ${minutes}m';
+    if (minutes > 0) return '${minutes}m ${seconds}s';
+    return '${seconds}s';
   }
 }
 

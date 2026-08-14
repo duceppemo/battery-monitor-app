@@ -18,6 +18,9 @@
 - [x] Add a bounded app-local session log and compact trend views with an
   explicit 7,200-entry retention policy.
 - [x] Add CSV export from user-approved, local session data.
+- [x] Add local-only Raw/Fast/Stable presentation filtering and named test
+  sessions with summaries. Raw telemetry remains the source for history,
+  export, alarms and firmware-sourced energy.
 
 ## Current release hardening
 

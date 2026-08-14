@@ -19,7 +19,7 @@ download and install.
 
 ## Current milestone
 
-The current app version is `0.3.1+10`. It provides a focused, foreground BLE
+The current app version is `0.3.2+11`. It provides a focused, foreground BLE
 companion for one monitor at a time:
 
 1. Service-filtered scan, connection lifecycle and an active disconnect action.
@@ -29,13 +29,33 @@ companion for one monitor at a time:
 4. Acknowledged reset, OLED, calibration and alarm controls on firmware
    0.5.1+ (`control1`).
 5. An app-local, bounded 7,200-entry session log with trend views and
-   user-approved CSV export/share.
-6. GitHub Release discovery, image download and BLE OTA with transfer progress,
+   user-approved CSV export/share, named test metadata and test summaries.
+6. Raw, fast and stable live-display filtering that never changes raw history,
+   alarms, CSV exports or firmware energy accounting.
+7. GitHub Release discovery, image download and BLE OTA with transfer progress,
    verification and a post-success reboot grace period.
 
 The firmware/app compatibility contract is
 [docs/BLE_PROTOCOL.md](docs/BLE_PROTOCOL.md). Treat a protocol change as a
 firmware-and-app release decision, not an implementation detail.
+
+## Live display filter modes
+
+The **Live values** card has a local display filter. It does not change the
+BLE packet, monitor calibration, min/max values, alarms, session log, CSV
+export, or the monitor's Ah/Wh counters.
+
+- **Raw** — shows each received one-Hz measurement immediately. Choose it for
+  commissioning, calibration, troubleshooting, or observing quick changes.
+- **Fast** — applies light smoothing to the displayed voltage, current, power
+  and temperature. It settles quickly while making normal low-current noise
+  less distracting.
+- **Stable** — applies stronger smoothing for the calmest readable display.
+  It deliberately reacts more slowly to a real change, so do not use it to
+  judge fast transients or a safety-critical event.
+
+Changing modes clears the previous filter state, so the first displayed sample
+in the newly selected mode is always current rather than an old value.
 
 Platform permission and signing guidance is in
 [docs/PLATFORM_SETUP.md](docs/PLATFORM_SETUP.md).
