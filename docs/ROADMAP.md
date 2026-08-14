@@ -21,6 +21,8 @@
 - [x] Add local-only Raw/Fast/Stable presentation filtering and named test
   sessions with summaries. Raw telemetry remains the source for history,
   export, alarms and firmware-sourced energy.
+- [x] Add a transition-only, app-local event timeline to test sessions and CSV
+  exports for BLE lifecycle, alarms, telemetry errors and detected restarts.
 
 ## Current release hardening
 

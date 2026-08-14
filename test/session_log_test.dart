@@ -56,6 +56,7 @@ void main() {
       netAmpHours: 0.2,
       netWattHours: 0.8,
     ));
+    log.recordEvent('Low voltage', detail: '3.000 V threshold');
     tick = tick.add(const Duration(minutes: 1));
     log.add(BinaryTelemetryV1.simulated(
       sequence: 2,
@@ -71,6 +72,7 @@ void main() {
 
     expect(summary.metadata.displayName, 'Capacity test');
     expect(summary.sampleCount, 2);
+    expect(summary.eventCount, 3);
     expect(summary.duration, const Duration(minutes: 1));
     expect(summary.netAmpHours, closeTo(0.1, 0.000001));
     expect(summary.voltageStartVolts, 4.1);
@@ -78,5 +80,7 @@ void main() {
     expect(log.isRecording, isFalse);
     expect(log.toCsv(), contains('# session_name,Capacity test'));
     expect(log.toCsv(), contains('# rated_capacity_ah,2.500000'));
+    expect(log.toCsv(), contains('# events'));
+    expect(log.toCsv(), contains('Low voltage,3.000 V threshold'));
   });
 }

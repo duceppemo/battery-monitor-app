@@ -19,7 +19,7 @@ download and install.
 
 ## Current milestone
 
-The current app version is `0.3.2+11`. It provides a focused, foreground BLE
+The current app version is `0.3.3+12`. It provides a focused, foreground BLE
 companion for one monitor at a time:
 
 1. Service-filtered scan, connection lifecycle and an active disconnect action.
@@ -29,7 +29,8 @@ companion for one monitor at a time:
 4. Acknowledged reset, OLED, calibration and alarm controls on firmware
    0.5.1+ (`control1`).
 5. An app-local, bounded 7,200-entry session log with trend views and
-   user-approved CSV export/share, named test metadata and test summaries.
+   user-approved CSV export/share, named test metadata, summaries and an event
+   timeline.
 6. Raw, fast and stable live-display filtering that never changes raw history,
    alarms, CSV exports or firmware energy accounting.
 7. GitHub Release discovery, image download and BLE OTA with transfer progress,
@@ -56,6 +57,19 @@ export, or the monitor's Ah/Wh counters.
 
 Changing modes clears the previous filter state, so the first displayed sample
 in the newly selected mode is always current rather than an old value.
+
+## Test-session event timeline
+
+Each recording test keeps a compact local event timeline alongside its raw
+samples. It records session start/finish, monitor connect/disconnect, BLE data
+errors, alarm activation/clear transitions, demo mode, and monitor restarts
+detected from an uptime reset. The test card shows the eight most recent
+events; its summary includes the total count.
+
+CSV exports preserve the original telemetry table and append a separate
+`event_at_utc,event_type,detail` table when events exist. The timeline is
+app-side evidence: it does not claim the monitor enforced an action or replace
+the raw measurement log.
 
 Platform permission and signing guidance is in
 [docs/PLATFORM_SETUP.md](docs/PLATFORM_SETUP.md).

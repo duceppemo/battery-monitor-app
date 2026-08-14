@@ -22,6 +22,7 @@ class TestSessionSummary {
     required this.startedAt,
     required this.endedAt,
     required this.sampleCount,
+    required this.eventCount,
     required this.voltageStartVolts,
     required this.voltageEndVolts,
     required this.voltageMinVolts,
@@ -40,6 +41,7 @@ class TestSessionSummary {
   final DateTime? startedAt;
   final DateTime? endedAt;
   final int sampleCount;
+  final int eventCount;
   final double? voltageStartVolts;
   final double? voltageEndVolts;
   final double? voltageMinVolts;
@@ -56,6 +58,18 @@ class TestSessionSummary {
   Duration get duration => startedAt == null || endedAt == null
       ? Duration.zero
       : endedAt!.difference(startedAt!);
+}
+
+class SessionEvent {
+  const SessionEvent({
+    required this.recordedAt,
+    required this.type,
+    this.detail = '',
+  });
+
+  final DateTime recordedAt;
+  final String type;
+  final String detail;
 }
 
 class SessionLogEntry {
@@ -91,6 +105,7 @@ class SessionLog {
   final int maximumEntries;
   final DateTime Function() _clock;
   final List<SessionLogEntry> _entries = [];
+  final List<SessionEvent> _events = [];
   DateTime? _startedAt;
   DateTime? _endedAt;
   int? _lastSequence;
@@ -98,6 +113,7 @@ class SessionLog {
   bool _isRecording = true;
 
   List<SessionLogEntry> get entries => List.unmodifiable(_entries);
+  List<SessionEvent> get events => List.unmodifiable(_events);
   TestSessionMetadata get metadata => _metadata;
   DateTime? get startedAt => _startedAt;
   DateTime? get endedAt => _endedAt;
@@ -107,17 +123,30 @@ class SessionLog {
 
   void start(TestSessionMetadata metadata) {
     _entries.clear();
+    _events.clear();
     _metadata = metadata;
     _startedAt = _clock();
     _endedAt = null;
     _lastSequence = null;
     _isRecording = true;
+    _addEvent('Session started', recordedAt: _startedAt!);
   }
 
   TestSessionSummary finish() {
+    if (!_isRecording) return _summarize(_endedAt ?? _clock());
     _endedAt ??= _clock();
+    _addEvent('Session finished', recordedAt: _endedAt!);
     _isRecording = false;
     return _summarize(_endedAt!);
+  }
+
+  /// Records a sparse app-side lifecycle or alarm transition alongside raw
+  /// telemetry. Events stop when a user finishes the test session.
+  void recordEvent(String type, {String detail = ''}) {
+    if (!_isRecording) return;
+    final now = _clock();
+    _startedAt ??= now;
+    _addEvent(type, detail: detail, recordedAt: now);
   }
 
   void add(BinaryTelemetryV1 telemetry) {
@@ -141,6 +170,7 @@ class SessionLog {
 
   void clear() {
     _entries.clear();
+    _events.clear();
     _startedAt = _isRecording ? _clock() : null;
     _endedAt = null;
     _lastSequence = null;
@@ -171,6 +201,7 @@ class SessionLog {
     }
     final summary = this.summary;
     buffer.writeln('# sample_count,${summary.sampleCount}');
+    buffer.writeln('# event_count,${summary.eventCount}');
     buffer.writeln('# net_ah,${_number(summary.netAmpHours)}');
     buffer.writeln('# net_wh,${_number(summary.netWattHours)}');
     buffer.writeln(
@@ -189,6 +220,18 @@ class SessionLog {
         _number(entry.netWattHours),
       ].join(','));
     }
+    if (_events.isNotEmpty) {
+      buffer.writeln();
+      buffer.writeln('# events');
+      buffer.writeln('event_at_utc,event_type,detail');
+      for (final event in _events) {
+        buffer.writeln([
+          event.recordedAt.toUtc().toIso8601String(),
+          _csvField(event.type),
+          _csvField(event.detail),
+        ].join(','));
+      }
+    }
     return buffer.toString();
   }
 
@@ -200,6 +243,7 @@ class SessionLog {
       startedAt: _startedAt,
       endedAt: _entries.isEmpty ? _endedAt : end,
       sampleCount: _entries.length,
+      eventCount: _events.length,
       voltageStartVolts: first?.voltageVolts,
       voltageEndVolts: last?.voltageVolts,
       voltageMinVolts: _minimum(_entries.map((entry) => entry.voltageVolts)),
@@ -231,6 +275,19 @@ class SessionLog {
       }
     }
     return result;
+  }
+
+  void _addEvent(
+    String type, {
+    String detail = '',
+    required DateTime recordedAt,
+  }) {
+    _events.add(SessionEvent(
+      recordedAt: recordedAt,
+      type: type,
+      detail: detail,
+    ));
+    if (_events.length > 500) _events.removeAt(0);
   }
 
   static double? _maximum(Iterable<double?> values) {

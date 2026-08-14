@@ -41,6 +41,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
   final GithubReleaseChecker _releaseChecker = GithubReleaseChecker();
   AlarmSettings _alarmSettings = const AlarmSettings();
   List<String> _alarmMessages = const [];
+  Set<String> _recordedAlarmMessages = <String>{};
   bool _alarmSettingsDirty = false;
   final List<int> _calibrationSamples = [];
   final _resistanceController = TextEditingController(text: '15.000');
@@ -64,6 +65,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
   String? _deviceInfo;
   bool _calibrationFieldsInitialized = false;
   bool _finalShuntPresetSelected = false;
+  int? _lastMonitorUptimeSeconds;
   Timer? _demoTimer;
   bool _demoMode = false;
   int _demoSequence = 0;
@@ -163,6 +165,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
       _telemetry = null;
       _presentedTelemetry = null;
       _presentationFilter.reset();
+      _recordedAlarmMessages = <String>{};
       _status = 'Scanning for Battery Monitor...';
     });
     _scanSubscription = widget.ble.scan().listen(
@@ -358,6 +361,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
       _telemetry = null;
       _presentedTelemetry = null;
       _presentationFilter.reset();
+      _recordedAlarmMessages = <String>{};
       _dashboard = DashboardSnapshot()
         ..hasState = true
         ..sensorOk = true
@@ -368,6 +372,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
         ..shuntResistanceOhms = 0.015
         ..currentGain = 1.0;
       _status = 'Demo monitor - simulated telemetry';
+      _sessionLog.recordEvent('Demo monitor started');
     });
     _demoTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
       if (!mounted) return;
@@ -405,6 +410,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
           ..lastShuntVoltageNanoVolts = (current * 0.015 * 1e9).round()
           ..shuntVoltageValid = true;
         _alarmMessages = _alarmSettings.evaluate(telemetry, _dashboard);
+        _recordAlarmTransitions();
       });
     });
   }
@@ -412,7 +418,12 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
   void _stopDemo() {
     _demoTimer?.cancel();
     _demoTimer = null;
-    if (mounted && _demoMode) setState(() => _demoMode = false);
+    if (mounted && _demoMode) {
+      setState(() {
+        _demoMode = false;
+        _sessionLog.recordEvent('Demo monitor stopped');
+      });
+    }
   }
 
   static double _min(double? old, double value) =>
@@ -439,6 +450,8 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
       _presentedTelemetry = null;
       _presentationFilter.reset();
       _dashboard = DashboardSnapshot();
+      _lastMonitorUptimeSeconds = null;
+      _recordedAlarmMessages = <String>{};
       _deviceInfo = null;
       _calibrationFieldsInitialized = false;
       _status =
@@ -453,6 +466,14 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
             _clearDownloadedFirmware(
               status:
                   'Connection lost. Download firmware again after reconnecting to a monitor.',
+            );
+            _sessionLog.recordEvent('Monitor disconnected');
+            _recordedAlarmMessages = <String>{};
+          } else if (update.connectionState ==
+              DeviceConnectionState.connected) {
+            _sessionLog.recordEvent(
+              'Monitor connected',
+              detail: device.name.isEmpty ? device.id : device.name,
             );
           }
           _status = switch (update.connectionState) {
@@ -477,6 +498,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
             );
             _connectionState = DeviceConnectionState.disconnected;
             _status = 'Connection failed: $error';
+            _sessionLog.recordEvent('Connection failed', detail: '$error');
           });
         }
       },
@@ -503,6 +525,9 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
       _presentationFilter.reset();
       _deviceInfo = null;
       _dashboard = DashboardSnapshot();
+      _lastMonitorUptimeSeconds = null;
+      _recordedAlarmMessages = <String>{};
+      _sessionLog.recordEvent('Monitor disconnected by user');
       _status = 'Disconnected — scan to connect to a monitor.';
     });
   }
@@ -621,18 +646,35 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
             _presentedTelemetry = _presentationFilter.update(packet);
             _sessionLog.add(packet);
             _alarmMessages = _alarmSettings.evaluate(packet, _dashboard);
+            _recordAlarmTransitions();
             _status = 'Connected - receiving live telemetry';
           });
         }
       },
       onError: (Object error) {
-        if (mounted) setState(() => _status = 'Live telemetry failed: $error');
+        if (mounted) {
+          setState(() {
+            _status = 'Live telemetry failed: $error';
+            _sessionLog.recordEvent('Live telemetry failed', detail: '$error');
+          });
+        }
       },
     );
     _dashboardSubscription = widget.ble.dashboard(deviceId).listen(
       (packet) {
         if (!mounted) return;
         setState(() {
+          if (packet.type == DashboardPacketType.state) {
+            final uptime = packet.uptimeSeconds;
+            final previousUptime = _lastMonitorUptimeSeconds;
+            if (previousUptime != null && uptime < previousUptime) {
+              _sessionLog.recordEvent(
+                'Monitor restart detected',
+                detail: 'Uptime reset from ${previousUptime}s to ${uptime}s',
+              );
+            }
+            _lastMonitorUptimeSeconds = uptime;
+          }
           _dashboard.update(packet);
           if (packet.type == DashboardPacketType.alarms &&
               !_alarmSettingsDirty) {
@@ -648,6 +690,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
           if (_telemetry != null) {
             _alarmMessages = _alarmSettings.evaluate(_telemetry!, _dashboard);
           }
+          _recordAlarmTransitions();
           if (packet.type == DashboardPacketType.calibration &&
               !_calibrationFieldsInitialized) {
             _calibrationFieldsInitialized = true;
@@ -660,7 +703,12 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
         });
       },
       onError: (Object error) {
-        if (mounted) setState(() => _status = 'Dashboard data failed: $error');
+        if (mounted) {
+          setState(() {
+            _status = 'Dashboard data failed: $error';
+            _sessionLog.recordEvent('Dashboard data failed', detail: '$error');
+          });
+        }
       },
     );
   }
@@ -914,7 +962,10 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
     capacity.dispose();
     notes.dispose();
     if (metadata == null || !mounted) return;
-    setState(() => _sessionLog.start(metadata));
+    setState(() {
+      _sessionLog.start(metadata);
+      _recordedAlarmMessages = <String>{};
+    });
     _showMessage('Test session "${metadata.displayName}" started.');
   }
 
@@ -939,6 +990,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
               children: [
                 _valueRow('Duration', _formatDuration(summary.duration)),
                 _valueRow('Samples', '${summary.sampleCount}'),
+                _valueRow('Events', '${summary.eventCount}'),
                 _valueRow(
                     'Voltage',
                     '${_format(summary.voltageStartVolts, 'V')} → '
@@ -1268,6 +1320,17 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
     return messages;
   }
 
+  void _recordAlarmTransitions() {
+    final active = _visibleAlarmMessages.toSet();
+    for (final alarm in active.difference(_recordedAlarmMessages)) {
+      _sessionLog.recordEvent('Alarm active', detail: alarm);
+    }
+    for (final alarm in _recordedAlarmMessages.difference(active)) {
+      _sessionLog.recordEvent('Alarm cleared', detail: alarm);
+    }
+    _recordedAlarmMessages = active;
+  }
+
   Widget _alarmSection(BuildContext context) => Card(
         color: _visibleAlarmMessages.isEmpty
             ? null
@@ -1367,6 +1430,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
   Widget _logSection(BuildContext context) {
     final entries = _sessionLog.entries;
     final summary = _sessionLog.summary;
+    final recentEvents = _sessionLog.events.reversed.take(8).toList();
     return _SectionCard(
       title: 'Test session',
       child: Column(
@@ -1421,6 +1485,35 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
             _valueRow('Captured duration', _formatDuration(summary.duration)),
             _valueRow('Captured net',
                 '${_format(summary.netAmpHours, 'Ah')} / ${_format(summary.netWattHours, 'Wh')}'),
+            _valueRow('Events', '${summary.eventCount}'),
+            const SizedBox(height: 8),
+          ],
+          if (recentEvents.isNotEmpty) ...[
+            Text('Event timeline',
+                style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 4),
+            for (final event in recentEvents)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 68,
+                      child: Text(_formatEventTime(event.recordedAt),
+                          style: Theme.of(context).textTheme.bodySmall),
+                    ),
+                    Expanded(
+                      child: Text(
+                        event.detail.isEmpty
+                            ? event.type
+                            : '${event.type}: ${event.detail}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             const SizedBox(height: 8),
           ],
           Wrap(
@@ -1743,6 +1836,12 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
     if (hours > 0) return '${hours}h ${minutes}m';
     if (minutes > 0) return '${minutes}m ${seconds}s';
     return '${seconds}s';
+  }
+
+  static String _formatEventTime(DateTime timestamp) {
+    final local = timestamp.toLocal();
+    String part(int value) => value.toString().padLeft(2, '0');
+    return '${part(local.hour)}:${part(local.minute)}:${part(local.second)}';
   }
 }
 
