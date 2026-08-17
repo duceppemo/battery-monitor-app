@@ -60,8 +60,10 @@ class TestSessionSummary {
       : endedAt!.difference(startedAt!);
 
   /// App-local capacity progress based on the net Ah change captured during
-  /// this test. It is available only for a positive discharge session with a
-  /// positive, user-supplied rated capacity.
+  /// this test, clamped to [0, 1] so a discharge that exceeds the rated
+  /// capacity still reads as 100% used / 0% remaining instead of the two
+  /// figures disagreeing. Available only for a positive discharge session
+  /// with a positive, user-supplied rated capacity.
   double? get dischargedCapacityFraction {
     final capacity = metadata.ratedCapacityAh;
     final discharged = netAmpHours;
@@ -71,21 +73,19 @@ class TestSessionSummary {
         discharged < 0) {
       return null;
     }
-    return discharged / capacity;
+    return (discharged / capacity).clamp(0, 1).toDouble();
   }
 
   double? get estimatedRemainingCapacityAh {
     final capacity = metadata.ratedCapacityAh;
     final fraction = dischargedCapacityFraction;
     if (capacity == null || fraction == null) return null;
-    return (capacity * (1 - fraction)).clamp(0, capacity).toDouble();
+    return capacity * (1 - fraction);
   }
 
   double? get estimatedRemainingCapacityPercent {
     final fraction = dischargedCapacityFraction;
-    return fraction == null
-        ? null
-        : (100 * (1 - fraction)).clamp(0, 100).toDouble();
+    return fraction == null ? null : 100 * (1 - fraction);
   }
 }
 

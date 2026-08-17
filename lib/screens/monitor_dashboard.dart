@@ -1007,11 +1007,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
                     '${(summary.dischargedCapacityFraction! * 100).toStringAsFixed(1)}%',
                   ),
                 if (summary.estimatedRemainingCapacityAh != null)
-                  _valueRow(
-                    'Estimated remaining',
-                    '${summary.estimatedRemainingCapacityAh!.toStringAsFixed(3)} Ah '
-                        '(${summary.estimatedRemainingCapacityPercent!.toStringAsFixed(1)}%)',
-                  ),
+                  _estimatedRemainingRow(summary),
               ],
             ),
           ),
@@ -1503,7 +1499,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
                   style: Theme.of(context).textTheme.titleSmall),
               const SizedBox(height: 4),
               LinearProgressIndicator(
-                value: summary.dischargedCapacityFraction!.clamp(0, 1),
+                value: summary.dischargedCapacityFraction!,
               ),
               const SizedBox(height: 4),
               _valueRow(
@@ -1511,11 +1507,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
                 '${_format(summary.netAmpHours, 'Ah')} '
                     '(${(summary.dischargedCapacityFraction! * 100).toStringAsFixed(1)}% of rated)',
               ),
-              _valueRow(
-                'Estimated remaining',
-                '${summary.estimatedRemainingCapacityAh!.toStringAsFixed(3)} Ah '
-                    '(${summary.estimatedRemainingCapacityPercent!.toStringAsFixed(1)}%)',
-              ),
+              _estimatedRemainingRow(summary),
             ],
             const SizedBox(height: 8),
           ],
@@ -1840,6 +1832,13 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
 
   static String _format(double? value, String unit) =>
       value == null ? 'Unavailable' : '${value.toStringAsFixed(3)} $unit';
+
+  static Widget _estimatedRemainingRow(TestSessionSummary summary) =>
+      _valueRow(
+        'Estimated remaining',
+        '${_format(summary.estimatedRemainingCapacityAh, 'Ah')} '
+            '(${summary.estimatedRemainingCapacityPercent!.toStringAsFixed(1)}%)',
+      );
 
   static String _minMax(double? min, double? max, String unit) => min == null ||
           max == null

@@ -86,4 +86,46 @@ void main() {
     expect(log.toCsv(), contains('# events'));
     expect(log.toCsv(), contains('Low voltage,3.000 V threshold'));
   });
+
+  test('clamps capacity progress when a discharge exceeds rated capacity',
+      () {
+    var tick = DateTime.utc(2026, 8, 13, 12);
+    final log = SessionLog(clock: () => tick);
+    log.start(const TestSessionMetadata(
+      name: 'Over-capacity discharge',
+      chemistry: 'Li-ion',
+      ratedCapacityAh: 2,
+      notes: '',
+    ));
+    log.add(BinaryTelemetryV1.simulated(
+      sequence: 1,
+      voltageVolts: 4.1,
+      currentAmps: 1,
+      powerWatts: 4.1,
+      temperatureCelsius: 25,
+      netAmpHours: 0.2,
+      netWattHours: 0.8,
+    ));
+    tick = tick.add(const Duration(minutes: 1));
+    log.add(BinaryTelemetryV1.simulated(
+      sequence: 2,
+      voltageVolts: 3.5,
+      currentAmps: 1,
+      powerWatts: 3.5,
+      temperatureCelsius: 26,
+      netAmpHours: 2.7,
+      netWattHours: 9.5,
+    ));
+
+    final summary = log.finish();
+
+    expect(summary.netAmpHours, closeTo(2.5, 0.000001));
+    // A degraded/mislabeled cell can discharge past its rating; the fraction
+    // must clamp to 1.0 so "used" and "remaining" always agree instead of
+    // showing e.g. 125% used alongside a 0% remaining that only looks right
+    // by coincidence of its own separate clamp.
+    expect(summary.dischargedCapacityFraction, 1.0);
+    expect(summary.estimatedRemainingCapacityAh, 0.0);
+    expect(summary.estimatedRemainingCapacityPercent, 0.0);
+  });
 }
