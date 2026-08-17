@@ -75,6 +75,9 @@ void main() {
     expect(summary.eventCount, 3);
     expect(summary.duration, const Duration(minutes: 1));
     expect(summary.netAmpHours, closeTo(0.1, 0.000001));
+    expect(summary.dischargedCapacityFraction, closeTo(0.04, 0.000001));
+    expect(summary.estimatedRemainingCapacityAh, closeTo(2.4, 0.000001));
+    expect(summary.estimatedRemainingCapacityPercent, closeTo(96, 0.000001));
     expect(summary.voltageStartVolts, 4.1);
     expect(summary.voltageEndVolts, 4);
     expect(log.isRecording, isFalse);

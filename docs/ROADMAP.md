@@ -23,6 +23,8 @@
   export, alarms and firmware-sourced energy.
 - [x] Add a transition-only, app-local event timeline to test sessions and CSV
   exports for BLE lifecycle, alarms, telemetry errors and detected restarts.
+- [x] Show rated-capacity progress and a remaining-capacity estimate from a
+  net-discharge test session; validate it after final-shunt commissioning.
 
 ## Current release hardening
 

@@ -58,6 +58,35 @@ class TestSessionSummary {
   Duration get duration => startedAt == null || endedAt == null
       ? Duration.zero
       : endedAt!.difference(startedAt!);
+
+  /// App-local capacity progress based on the net Ah change captured during
+  /// this test. It is available only for a positive discharge session with a
+  /// positive, user-supplied rated capacity.
+  double? get dischargedCapacityFraction {
+    final capacity = metadata.ratedCapacityAh;
+    final discharged = netAmpHours;
+    if (capacity == null ||
+        capacity <= 0 ||
+        discharged == null ||
+        discharged < 0) {
+      return null;
+    }
+    return discharged / capacity;
+  }
+
+  double? get estimatedRemainingCapacityAh {
+    final capacity = metadata.ratedCapacityAh;
+    final fraction = dischargedCapacityFraction;
+    if (capacity == null || fraction == null) return null;
+    return (capacity * (1 - fraction)).clamp(0, capacity).toDouble();
+  }
+
+  double? get estimatedRemainingCapacityPercent {
+    final fraction = dischargedCapacityFraction;
+    return fraction == null
+        ? null
+        : (100 * (1 - fraction)).clamp(0, 100).toDouble();
+  }
 }
 
 class SessionEvent {

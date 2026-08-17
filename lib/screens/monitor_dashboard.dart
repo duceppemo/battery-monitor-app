@@ -1001,6 +1001,17 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
                         summary.currentMinAmps, summary.currentMaxAmps, 'A')),
                 _valueRow('Net charge', _format(summary.netAmpHours, 'Ah')),
                 _valueRow('Net energy', _format(summary.netWattHours, 'Wh')),
+                if (summary.dischargedCapacityFraction != null)
+                  _valueRow(
+                    'Rated capacity used',
+                    '${(summary.dischargedCapacityFraction! * 100).toStringAsFixed(1)}%',
+                  ),
+                if (summary.estimatedRemainingCapacityAh != null)
+                  _valueRow(
+                    'Estimated remaining',
+                    '${summary.estimatedRemainingCapacityAh!.toStringAsFixed(3)} Ah '
+                        '(${summary.estimatedRemainingCapacityPercent!.toStringAsFixed(1)}%)',
+                  ),
               ],
             ),
           ),
@@ -1486,6 +1497,26 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
             _valueRow('Captured net',
                 '${_format(summary.netAmpHours, 'Ah')} / ${_format(summary.netWattHours, 'Wh')}'),
             _valueRow('Events', '${summary.eventCount}'),
+            if (summary.dischargedCapacityFraction != null) ...[
+              const SizedBox(height: 4),
+              Text('Capacity progress (app estimate)',
+                  style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 4),
+              LinearProgressIndicator(
+                value: summary.dischargedCapacityFraction!.clamp(0, 1),
+              ),
+              const SizedBox(height: 4),
+              _valueRow(
+                'Discharged',
+                '${_format(summary.netAmpHours, 'Ah')} '
+                    '(${(summary.dischargedCapacityFraction! * 100).toStringAsFixed(1)}% of rated)',
+              ),
+              _valueRow(
+                'Estimated remaining',
+                '${summary.estimatedRemainingCapacityAh!.toStringAsFixed(3)} Ah '
+                    '(${summary.estimatedRemainingCapacityPercent!.toStringAsFixed(1)}%)',
+              ),
+            ],
             const SizedBox(height: 8),
           ],
           if (recentEvents.isNotEmpty) ...[

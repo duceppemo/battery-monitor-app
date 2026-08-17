@@ -19,7 +19,7 @@ download and install.
 
 ## Current milestone
 
-The current app version is `0.3.3+12`. It provides a focused, foreground BLE
+The current app version is `0.3.4+13`. It provides a focused, foreground BLE
 companion for one monitor at a time:
 
 1. Service-filtered scan, connection lifecycle and an active disconnect action.
@@ -30,7 +30,7 @@ companion for one monitor at a time:
    0.5.1+ (`control1`).
 5. An app-local, bounded 7,200-entry session log with trend views and
    user-approved CSV export/share, named test metadata, summaries and an event
-   timeline.
+   timeline, plus rated-capacity progress for discharge tests.
 6. Raw, fast and stable live-display filtering that never changes raw history,
    alarms, CSV exports or firmware energy accounting.
 7. GitHub Release discovery, image download and BLE OTA with transfer progress,
@@ -70,6 +70,18 @@ CSV exports preserve the original telemetry table and append a separate
 `event_at_utc,event_type,detail` table when events exist. The timeline is
 app-side evidence: it does not claim the monitor enforced an action or replace
 the raw measurement log.
+
+## Capacity progress estimate
+
+When starting a named test, enter an optional positive **Rated capacity (Ah)**.
+For a net-discharge test, the app compares the captured session net Ah change
+with that rating and shows discharged percentage plus estimated remaining Ah
+and percentage. The estimate is not shown for net charging sessions.
+
+This is a convenient session-progress indicator, not a voltage-based state of
+charge model or a substitute for calibration. Its accuracy depends on the
+monitor's current calibration, the shunt, and keeping the test session running
+for the discharge being measured.
 
 Platform permission and signing guidance is in
 [docs/PLATFORM_SETUP.md](docs/PLATFORM_SETUP.md).
