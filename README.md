@@ -19,13 +19,13 @@ download and install.
 
 ## Current milestone
 
-The current app version is `0.3.4+13`. It provides a focused, foreground BLE
+The current app version is `0.3.5+14`. It provides a focused, foreground BLE
 companion for one monitor at a time:
 
 1. Service-filtered scan, connection lifecycle and an active disconnect action.
 2. Binary Telemetry v1 with fresh/stale state, live values and session energy.
 3. Rotating dashboard data for extrema, directional energy, calibration,
-   sensor configuration and persistent alarms.
+   sensor configuration, persistent alarms and Wi-Fi station status.
 4. Acknowledged reset, OLED, calibration and alarm controls on firmware
    0.5.1+ (`control1`).
 5. An app-local, bounded 7,200-entry session log with trend views and
@@ -35,6 +35,9 @@ companion for one monitor at a time:
    alarms, CSV exports or firmware energy accounting.
 7. GitHub Release discovery, image download and BLE OTA with transfer progress,
    verification and a post-success reboot grace period.
+8. Home Wi-Fi station setup and forget, over BLE, on firmware 0.5.3+
+   (`wifi1`) — no need to leave your own network to join the monitor's
+   recovery AP just to configure it.
 
 The firmware/app compatibility contract is
 [docs/BLE_PROTOCOL.md](docs/BLE_PROTOCOL.md). Treat a protocol change as a

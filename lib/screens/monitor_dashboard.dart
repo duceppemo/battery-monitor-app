@@ -52,6 +52,8 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
   final _highVoltageAlarmController = TextEditingController(text: '4.250');
   final _currentAlarmController = TextEditingController(text: '5.000');
   final _temperatureAlarmController = TextEditingController(text: '60.0');
+  final _wifiSsidController = TextEditingController();
+  final _wifiPasswordController = TextEditingController();
 
   StreamSubscription<DiscoveredDevice>? _scanSubscription;
   StreamSubscription<ConnectionStateUpdate>? _connectionSubscription;
@@ -86,6 +88,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
   bool get _supportsBleOta => _deviceInfo?.contains('ota1') ?? false;
   bool get _supportsAcknowledgedControls =>
       _deviceInfo?.contains('control1') ?? false;
+  bool get _supportsBleWifi => _deviceInfo?.contains('wifi1') ?? false;
   String get _monitorFirmwareVersion =>
       RegExp(r'FW=([^;]+)').firstMatch(_deviceInfo ?? '')?.group(1) ??
       'Reading...';
@@ -136,6 +139,8 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
     _highVoltageAlarmController.dispose();
     _currentAlarmController.dispose();
     _temperatureAlarmController.dispose();
+    _wifiSsidController.dispose();
+    _wifiPasswordController.dispose();
     super.dispose();
   }
 
@@ -729,6 +734,70 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
     }
   }
 
+  Future<void> _saveWifi() async {
+    final deviceId = _selectedDeviceId;
+    if (!_canControl || deviceId == null) return;
+    if (!_supportsBleWifi) {
+      _showMessage('Update the monitor firmware to set Wi-Fi from the app.');
+      return;
+    }
+    final ssid = _wifiSsidController.text.trim();
+    final password = _wifiPasswordController.text;
+    if (ssid.isEmpty) {
+      _showMessage('Enter the home Wi-Fi name.');
+      return;
+    }
+    if (password.isNotEmpty && password.length < 8) {
+      _showMessage(
+          'Wi-Fi passwords must be at least 8 characters (or leave blank only for an open network).');
+      return;
+    }
+    try {
+      await widget.ble.saveWifi(deviceId, ssid, password);
+      if (mounted) {
+        _wifiPasswordController.clear();
+        _showMessage(
+            'Saved. Connecting while the recovery AP stays available.');
+      }
+    } on Object catch (error) {
+      if (mounted) _showMessage('Wi-Fi settings were not saved: $error');
+    }
+  }
+
+  Future<void> _clearWifi() async {
+    final deviceId = _selectedDeviceId;
+    if (!_canControl || deviceId == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Forget home Wi-Fi?'),
+        content: const Text(
+            'The recovery access point stays available either way.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Forget'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await widget.ble.clearWifi(deviceId);
+      if (mounted) {
+        _wifiSsidController.clear();
+        _wifiPasswordController.clear();
+        _showMessage('Home Wi-Fi forgotten.');
+      }
+    } on Object catch (error) {
+      if (mounted) _showMessage('Unable to clear Wi-Fi settings: $error');
+    }
+  }
+
   void _captureZero() {
     final average = _stableCalibrationAverage();
     if (average == null) {
@@ -1081,6 +1150,8 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
             _shuntSetupSection(context),
             const SizedBox(height: 12),
             _calibrationSection(context),
+            const SizedBox(height: 12),
+            _wifiSection(context),
           ],
           const SizedBox(height: 12),
           _connectionAndUpdatesSection(context),
@@ -1776,6 +1847,59 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
                         'Default calibration restored; session values were reset.')
                     : null,
                 child: const Text('Restore default'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _wifiSection(BuildContext context) {
+    final ip = _dashboard.wifiStationIp;
+    final subtitle = !_dashboard.wifiStationConfigured
+        ? 'Home Wi-Fi not configured. Recovery AP is active.'
+        : _dashboard.wifiStationConnected
+            ? 'Connected${ip != null ? ' at $ip' : ''}'
+                '${_dashboard.wifiMdnsReady ? ' (battery-monitor.local)' : ''}'
+            : 'Connecting... recovery AP remains available.';
+    return Card(
+      child: ExpansionTile(
+        title: const Text('Wi-Fi station & mDNS'),
+        subtitle: Text(subtitle),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        children: [
+          const Text(
+            'The local recovery access point always remains available. Save '
+            'home-network credentials to join it in parallel. The stored '
+            'password is never shown here; enter it each time you save '
+            '(leave it blank only for an open network).',
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _wifiSsidController,
+            maxLength: 32,
+            decoration: const InputDecoration(labelText: 'Home Wi-Fi name (SSID)'),
+          ),
+          TextField(
+            controller: _wifiPasswordController,
+            maxLength: 63,
+            obscureText: true,
+            decoration: const InputDecoration(labelText: 'Home Wi-Fi password'),
+          ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton(
+                onPressed: _canControl ? _saveWifi : null,
+                child: const Text('Save & connect'),
+              ),
+              TextButton(
+                onPressed: _canControl && _dashboard.wifiStationConfigured
+                    ? _clearWifi
+                    : null,
+                child: const Text('Forget home Wi-Fi'),
               ),
             ],
           ),

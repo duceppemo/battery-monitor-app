@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:battery_monitor_app/ble/ble_ids.dart';
@@ -24,6 +25,10 @@ abstract interface class BatteryMonitorBleClient {
   Stream<ControlStatus> controlStatus(String deviceId);
 
   Future<void> sendControl(String deviceId, List<int> command);
+
+  Future<void> saveWifi(String deviceId, String ssid, String password);
+
+  Future<void> clearWifi(String deviceId);
 
   Future<String> deviceInfo(String deviceId);
 
@@ -143,6 +148,37 @@ class BatteryMonitorBle implements BatteryMonitorBleClient {
       await subscription.cancel();
     }
   }
+
+  @override
+  Future<void> saveWifi(String deviceId, String ssid, String password) async {
+    final ssidBytes = utf8.encode(ssid);
+    final passwordBytes = utf8.encode(password);
+    if (ssidBytes.isEmpty || ssidBytes.length > 32) {
+      throw ArgumentError.value(ssid, 'ssid', 'Must be 1-32 UTF-8 bytes.');
+    }
+    if (passwordBytes.length > 64) {
+      throw ArgumentError.value(
+          password, 'password', 'Must be at most 64 UTF-8 bytes.');
+    }
+    // The payload can reach 99 bytes, well past the default 20-byte usable
+    // ATT payload. A short SSID/password may fit anyway; let the write
+    // itself surface a clear failure if negotiation didn't help enough.
+    try {
+      await _client.requestMtu(deviceId: deviceId, mtu: 247);
+    } on Object {
+      // Ignored: see above.
+    }
+    await sendControl(deviceId, [
+      7,
+      ssidBytes.length,
+      ...ssidBytes,
+      passwordBytes.length,
+      ...passwordBytes,
+    ]);
+  }
+
+  @override
+  Future<void> clearWifi(String deviceId) => sendControl(deviceId, const [8]);
 
   @override
   Future<String> deviceInfo(String deviceId) async {

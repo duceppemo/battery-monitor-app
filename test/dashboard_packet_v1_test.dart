@@ -41,4 +41,33 @@ void main() {
   test('rejects a malformed dashboard page', () {
     expect(() => DashboardPacketV1.decode(const [0x11]), throwsFormatException);
   });
+
+  test('decodes a Wi-Fi station status dashboard page', () {
+    final wifi = Uint8List(20);
+    wifi[0] = 0x17;
+    wifi[1] = 0x07; // configured, connected, mDNS ready.
+    wifi[2] = 192;
+    wifi[3] = 168;
+    wifi[4] = 68;
+    wifi[5] = 57;
+
+    final snapshot = DashboardSnapshot()..update(DashboardPacketV1.decode(wifi));
+
+    expect(snapshot.wifiStationConfigured, isTrue);
+    expect(snapshot.wifiStationConnected, isTrue);
+    expect(snapshot.wifiMdnsReady, isTrue);
+    expect(snapshot.wifiStationIp, '192.168.68.57');
+  });
+
+  test('omits the station IP when not connected', () {
+    final wifi = Uint8List(20);
+    wifi[0] = 0x17;
+    wifi[1] = 0x01; // configured, but not yet connected.
+
+    final snapshot = DashboardSnapshot()..update(DashboardPacketV1.decode(wifi));
+
+    expect(snapshot.wifiStationConfigured, isTrue);
+    expect(snapshot.wifiStationConnected, isFalse);
+    expect(snapshot.wifiStationIp, isNull);
+  });
 }

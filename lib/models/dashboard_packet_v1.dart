@@ -3,7 +3,15 @@ import 'dart:typed_data';
 /// Compact 20-byte dashboard pages from the firmware's dashboard BLE
 /// characteristic.  Pages are intentionally independent so they remain safe
 /// on the baseline BLE ATT payload size.
-enum DashboardPacketType { extrema, energy, state, calibration, shunt, alarms }
+enum DashboardPacketType {
+  extrema,
+  energy,
+  state,
+  calibration,
+  shunt,
+  alarms,
+  wifi,
+}
 
 class DashboardPacketV1 {
   DashboardPacketV1._(this.type, this._packet);
@@ -15,6 +23,7 @@ class DashboardPacketV1 {
   static const _calibration = 0x14;
   static const _shunt = 0x15;
   static const _alarms = 0x16;
+  static const _wifi = 0x17;
 
   final DashboardPacketType type;
   final Uint8List _packet;
@@ -33,6 +42,7 @@ class DashboardPacketV1 {
       _calibration => DashboardPacketType.calibration,
       _shunt => DashboardPacketType.shunt,
       _alarms => DashboardPacketType.alarms,
+      _wifi => DashboardPacketType.wifi,
       final value =>
         throw FormatException('Unknown dashboard packet type $value.'),
     };
@@ -95,6 +105,12 @@ class DashboardPacketV1 {
   double get alarmHighVoltage => _data.getUint16(5, Endian.little) / 1000.0;
   double get alarmMaxCurrent => _int24(7) / 1000.0;
   double get alarmMaxTemperature => _data.getInt32(10, Endian.little) / 10.0;
+
+  bool get wifiStationConfigured => (_packet[1] & 1) != 0;
+  bool get wifiStationConnected => (_packet[1] & 2) != 0;
+  bool get wifiMdnsReady => (_packet[1] & 4) != 0;
+  String get wifiStationIp =>
+      '${_packet[2]}.${_packet[3]}.${_packet[4]}.${_packet[5]}';
 }
 
 /// The latest value of each independently rotating dashboard page.
@@ -141,6 +157,10 @@ class DashboardSnapshot {
   double? deviceAlarmHighVoltage;
   double? deviceAlarmMaxCurrent;
   double? deviceAlarmMaxTemperature;
+  bool wifiStationConfigured = false;
+  bool wifiStationConnected = false;
+  bool wifiMdnsReady = false;
+  String? wifiStationIp;
 
   void update(DashboardPacketV1 packet) {
     switch (packet.type) {
@@ -215,6 +235,13 @@ class DashboardSnapshot {
         deviceAlarmHighVoltage = packet.alarmHighVoltage;
         deviceAlarmMaxCurrent = packet.alarmMaxCurrent;
         deviceAlarmMaxTemperature = packet.alarmMaxTemperature;
+        break;
+      case DashboardPacketType.wifi:
+        wifiStationConfigured = packet.wifiStationConfigured;
+        wifiStationConnected = packet.wifiStationConnected;
+        wifiMdnsReady = packet.wifiMdnsReady;
+        wifiStationIp =
+            packet.wifiStationConnected ? packet.wifiStationIp : null;
         break;
     }
   }

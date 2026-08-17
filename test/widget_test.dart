@@ -54,6 +54,12 @@ class _FakeBatteryMonitorBle implements BatteryMonitorBleClient {
   Future<void> sendControl(String deviceId, List<int> command) async {}
 
   @override
+  Future<void> saveWifi(String deviceId, String ssid, String password) async {}
+
+  @override
+  Future<void> clearWifi(String deviceId) async {}
+
+  @override
   Future<String> deviceInfo(String deviceId) async => '';
 
   @override

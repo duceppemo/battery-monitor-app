@@ -1,7 +1,7 @@
 name: battery_monitor_app
 description: Cross-platform Flutter companion app for the Battery Monitor.
 publish_to: none
-version: 0.3.4+13
+version: 0.3.5+14
 
 environment:
   sdk: ^3.6.0

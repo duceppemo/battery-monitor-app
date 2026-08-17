@@ -3,7 +3,8 @@
 The app supports the firmware's Binary Telemetry v1, Dashboard Data v1 and
 Dashboard Control v1 contracts below. Firmware 0.5.0+ advertises `ota1` in
 Device Information; firmware 0.5.1+ additionally advertises `control1` for
-acknowledged controls.
+acknowledged controls; firmware 0.5.3+ additionally advertises `wifi1` for
+setting home Wi-Fi station credentials over BLE.
 
 ## Firmware Transfer v1
 
@@ -69,15 +70,23 @@ uses fixed 20-byte little-endian pages so the initial ATT MTU is sufficient:
 
 | UUID suffix | Access | Purpose |
 | --- | --- | --- |
-| `000a-9c65-4d3d-bdd5-8f4c6b2e1000` | Read, Notify | Rotating dashboard pages: extrema (`0x11`), directional energy (`0x12`), state (`0x13`), calibration (`0x14`), shunt/config (`0x15`) and alarms (`0x16`). See the firmware repository's `docs/BLE_PROTOCOL.md` for the byte layout. |
-| `000b-9c65-4d3d-bdd5-8f4c6b2e1000` | Write with response | Dashboard controls. Commands: `1` reset extrema, `2` reset session energy, `3` toggle OLED, `4` save calibration, `5` restore default calibration, `6` save alarms. The app appends a request ID. |
+| `000a-9c65-4d3d-bdd5-8f4c6b2e1000` | Read, Notify | Rotating dashboard pages: extrema (`0x11`), directional energy (`0x12`), state (`0x13`), calibration (`0x14`), shunt/config (`0x15`), alarms (`0x16`) and Wi-Fi station status (`0x17`). See the firmware repository's `docs/BLE_PROTOCOL.md` for the byte layout. |
+| `000b-9c65-4d3d-bdd5-8f4c6b2e1000` | Write with response | Dashboard controls. Commands: `1` reset extrema, `2` reset session energy, `3` toggle OLED, `4` save calibration, `5` restore default calibration, `6` save alarms, `7` save Wi-Fi station credentials, `8` clear Wi-Fi station credentials. The app appends a request ID. |
 | `000f-9c65-4d3d-bdd5-8f4c6b2e1000` | Read, Notify | Control result: version, command, request ID and applied/rejected/failed result. |
 
 The app subscribes to both the live telemetry and dashboard characteristics.
 Dashboard pages rotate once per one-second BLE update, so a newly connected app
-may take up to six seconds to populate all secondary information. Commands are
-applied by the firmware main loop and confirmed by the matching Control Result
-notification.
+may take up to seven seconds to populate all secondary information. Commands
+are applied by the firmware main loop and confirmed by the matching Control
+Result notification; commands `7` and `8` also show up on the next Wi-Fi
+station dashboard page.
+
+Command `7`'s payload (`u8` SSID length, SSID bytes, `u8` password length,
+password bytes) can reach 99 bytes before the appended request ID, well past
+the guaranteed 20-byte usable payload of a default 23-byte ATT MTU. The app
+requests a larger MTU (`247`) before writing it; a short SSID/password may
+still work without that, but a long one will fail if negotiation didn't help.
+The password must be empty (open network) or at least 8 bytes.
 
 Control Result is a fixed six-byte packet: protocol version (`1`), command,
 `u16` request ID, result (`0` idle, `1` applied, `2` rejected because another

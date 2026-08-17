@@ -32,6 +32,9 @@
   acknowledgement path to the shared dashboard protocol.
 - [x] Add Web and BLE OTA workflows, release discovery, image version display
   and transfer verification.
+- [x] Add BLE home Wi-Fi station setup and forget, so configuring the
+  monitor's network no longer requires leaving your own network to join its
+  recovery AP first.
 - [ ] Test scanning, reconnecting and live notifications on an iPhone.
 - [ ] Validate current, energy and alarm behavior after commissioning the
   final Kelvin shunt at known loads.
