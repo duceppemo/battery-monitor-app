@@ -70,4 +70,37 @@ void main() {
     expect(snapshot.wifiStationConnected, isFalse);
     expect(snapshot.wifiStationIp, isNull);
   });
+
+  test('decodes a synced, discharging state-of-charge dashboard page', () {
+    final soc = Uint8List(20);
+    soc[0] = 0x18;
+    soc[1] = 0x03; // known + discharging.
+    ByteData.sublistView(soc)
+      ..setUint16(2, 725, Endian.little) // 72.5%.
+      ..setUint32(4, 3600, Endian.little) // 1 hour to empty.
+      ..setUint32(8, 100000, Endian.little) // 100 Ah capacity.
+      ..setUint16(12, 14400, Endian.little); // 14.4 V charged.
+
+    final snapshot = DashboardSnapshot()..update(DashboardPacketV1.decode(soc));
+
+    expect(snapshot.socKnown, isTrue);
+    expect(snapshot.socHasTimeToEmpty, isTrue);
+    expect(snapshot.socPercent, 72.5);
+    expect(snapshot.socTimeToEmptySeconds, 3600);
+    expect(snapshot.socCapacityAh, 100.0);
+    expect(snapshot.socChargedVoltage, 14.4);
+  });
+
+  test('omits state-of-charge percent and time-to-empty when not synced', () {
+    final soc = Uint8List(20);
+    soc[0] = 0x18;
+    soc[1] = 0x00; // not synced, not discharging.
+
+    final snapshot = DashboardSnapshot()..update(DashboardPacketV1.decode(soc));
+
+    expect(snapshot.socKnown, isFalse);
+    expect(snapshot.socHasTimeToEmpty, isFalse);
+    expect(snapshot.socPercent, isNull);
+    expect(snapshot.socTimeToEmptySeconds, isNull);
+  });
 }

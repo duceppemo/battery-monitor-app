@@ -35,6 +35,10 @@
 - [x] Add BLE home Wi-Fi station setup and forget, so configuring the
   monitor's network no longer requires leaving your own network to join its
   recovery AP first.
+- [x] Add a battery fuel gauge card (state of charge, time-to-empty, capacity
+  and charged-voltage settings, manual full-charge sync) reading the
+  monitor's persisted, coulomb-counted state — distinct from the app-local,
+  per-test rated-capacity progress estimate above.
 - [ ] Test scanning, reconnecting and live notifications on an iPhone.
 - [ ] Validate current, energy and alarm behavior after commissioning the
   final Kelvin shunt at known loads.

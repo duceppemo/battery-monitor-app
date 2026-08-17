@@ -54,6 +54,8 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
   final _temperatureAlarmController = TextEditingController(text: '60.0');
   final _wifiSsidController = TextEditingController();
   final _wifiPasswordController = TextEditingController();
+  final _batteryCapacityController = TextEditingController();
+  final _batteryChargedVoltageController = TextEditingController();
 
   StreamSubscription<DiscoveredDevice>? _scanSubscription;
   StreamSubscription<ConnectionStateUpdate>? _connectionSubscription;
@@ -66,6 +68,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
   String? _selectedDeviceId;
   String? _deviceInfo;
   bool _calibrationFieldsInitialized = false;
+  bool _batteryProfileFieldsInitialized = false;
   bool _finalShuntPresetSelected = false;
   int? _lastMonitorUptimeSeconds;
   Timer? _demoTimer;
@@ -89,6 +92,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
   bool get _supportsAcknowledgedControls =>
       _deviceInfo?.contains('control1') ?? false;
   bool get _supportsBleWifi => _deviceInfo?.contains('wifi1') ?? false;
+  bool get _supportsSoc => _deviceInfo?.contains('soc1') ?? false;
   String get _monitorFirmwareVersion =>
       RegExp(r'FW=([^;]+)').firstMatch(_deviceInfo ?? '')?.group(1) ??
       'Reading...';
@@ -141,6 +145,8 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
     _temperatureAlarmController.dispose();
     _wifiSsidController.dispose();
     _wifiPasswordController.dispose();
+    _batteryCapacityController.dispose();
+    _batteryChargedVoltageController.dispose();
     super.dispose();
   }
 
@@ -462,6 +468,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
       _recordedAlarmMessages = <String>{};
       _deviceInfo = null;
       _calibrationFieldsInitialized = false;
+      _batteryProfileFieldsInitialized = false;
       _status =
           'Connecting to ${device.name.isEmpty ? device.id : device.name}...';
     });
@@ -708,6 +715,14 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
                 (_dashboard.shuntOffsetVolts! * 1e6).toStringAsFixed(3);
             _gainController.text = _dashboard.currentGain!.toStringAsFixed(6);
           }
+          if (packet.type == DashboardPacketType.stateOfCharge &&
+              !_batteryProfileFieldsInitialized) {
+            _batteryProfileFieldsInitialized = true;
+            _batteryCapacityController.text =
+                _dashboard.socCapacityAh.toStringAsFixed(3);
+            _batteryChargedVoltageController.text =
+                _dashboard.socChargedVoltage.toStringAsFixed(3);
+          }
         });
       },
       onError: (Object error) {
@@ -798,6 +813,68 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
       }
     } on Object catch (error) {
       if (mounted) _showMessage('Unable to clear Wi-Fi settings: $error');
+    }
+  }
+
+  Future<void> _saveBatteryProfile() async {
+    final deviceId = _selectedDeviceId;
+    if (!_canControl || deviceId == null) return;
+    if (!_supportsSoc) {
+      _showMessage('Update the monitor firmware for the battery fuel gauge.');
+      return;
+    }
+    final capacity = double.tryParse(_batteryCapacityController.text);
+    final chargedVoltage =
+        double.tryParse(_batteryChargedVoltageController.text);
+    if (capacity == null ||
+        !capacity.isFinite ||
+        capacity <= 0 ||
+        capacity > 10000) {
+      _showMessage('Enter a valid battery capacity (0-10000 Ah).');
+      return;
+    }
+    if (chargedVoltage == null ||
+        !chargedVoltage.isFinite ||
+        chargedVoltage <= 0 ||
+        chargedVoltage > 100) {
+      _showMessage('Enter a valid charged voltage (0-100 V).');
+      return;
+    }
+    try {
+      await widget.ble.saveBatteryProfile(deviceId, capacity, chargedVoltage);
+      if (mounted) _showMessage('Battery profile saved.');
+    } on Object catch (error) {
+      if (mounted) _showMessage('Battery profile was not saved: $error');
+    }
+  }
+
+  Future<void> _syncBatteryFull() async {
+    final deviceId = _selectedDeviceId;
+    if (!_canControl || deviceId == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Mark battery as fully charged?'),
+        content: const Text(
+            'This resets the fuel gauge to 100% now. Only confirm once you know the battery is actually full.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Mark full'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await widget.ble.syncBatteryFull(deviceId);
+      if (mounted) _showMessage('Fuel gauge synced to 100%.');
+    } on Object catch (error) {
+      if (mounted) _showMessage('Unable to sync the fuel gauge: $error');
     }
   }
 
@@ -1143,6 +1220,8 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
             _alarmSection(context),
             const SizedBox(height: 12),
             _sessionSection(context),
+            const SizedBox(height: 12),
+            _batterySection(context),
             const SizedBox(height: 12),
             _logSection(context),
             const SizedBox(height: 12),
@@ -1854,6 +1933,59 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
                         'Default calibration restored; session values were reset.')
                     : null,
                 child: const Text('Restore default'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _batterySection(BuildContext context) {
+    final percent = _dashboard.socPercent;
+    final ttgSeconds = _dashboard.socTimeToEmptySeconds;
+    final subtitle = !_dashboard.socKnown
+        ? 'Not yet synced. Fully charge the battery or tap "Mark as fully charged" once you know it is full.'
+        : ttgSeconds != null
+            ? '${percent!.toStringAsFixed(1)}% – ${_formatDuration(Duration(seconds: ttgSeconds))} to empty'
+            : '${percent!.toStringAsFixed(1)}% – not discharging';
+    return Card(
+      child: ExpansionTile(
+        title: const Text('Battery fuel gauge'),
+        subtitle: Text(subtitle),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        children: [
+          const Text(
+            'Coulomb-counted state of charge, persisted across reboots '
+            '(separate from the session Ah/Wh above, which reset on power '
+            'cycle). Resyncs to 100% automatically once the battery stays at '
+            'or above the charged voltage with a tapering current, or tap '
+            '"Mark as fully charged" once you know it is full.',
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _batteryCapacityController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration:
+                const InputDecoration(labelText: 'Battery capacity (Ah)'),
+          ),
+          TextField(
+            controller: _batteryChargedVoltageController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration:
+                const InputDecoration(labelText: 'Charged voltage (V)'),
+          ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton(
+                onPressed: _canControl ? _saveBatteryProfile : null,
+                child: const Text('Save battery profile'),
+              ),
+              TextButton(
+                onPressed: _canControl ? _syncBatteryFull : null,
+                child: const Text('Mark as fully charged'),
               ),
             ],
           ),

@@ -11,6 +11,7 @@ enum DashboardPacketType {
   shunt,
   alarms,
   wifi,
+  stateOfCharge,
 }
 
 class DashboardPacketV1 {
@@ -24,6 +25,7 @@ class DashboardPacketV1 {
   static const _shunt = 0x15;
   static const _alarms = 0x16;
   static const _wifi = 0x17;
+  static const _stateOfCharge = 0x18;
 
   final DashboardPacketType type;
   final Uint8List _packet;
@@ -43,6 +45,7 @@ class DashboardPacketV1 {
       _shunt => DashboardPacketType.shunt,
       _alarms => DashboardPacketType.alarms,
       _wifi => DashboardPacketType.wifi,
+      _stateOfCharge => DashboardPacketType.stateOfCharge,
       final value =>
         throw FormatException('Unknown dashboard packet type $value.'),
     };
@@ -111,6 +114,13 @@ class DashboardPacketV1 {
   bool get wifiMdnsReady => (_packet[1] & 4) != 0;
   String get wifiStationIp =>
       '${_packet[2]}.${_packet[3]}.${_packet[4]}.${_packet[5]}';
+
+  bool get socKnown => (_packet[1] & 1) != 0;
+  bool get socHasTimeToEmpty => (_packet[1] & 2) != 0;
+  double get socPercent => _data.getUint16(2, Endian.little) / 10.0;
+  int get socTimeToEmptySeconds => _data.getUint32(4, Endian.little);
+  double get socCapacityAh => _data.getUint32(8, Endian.little) / 1000.0;
+  double get socChargedVoltage => _data.getUint16(12, Endian.little) / 1000.0;
 }
 
 /// The latest value of each independently rotating dashboard page.
@@ -161,6 +171,12 @@ class DashboardSnapshot {
   bool wifiStationConnected = false;
   bool wifiMdnsReady = false;
   String? wifiStationIp;
+  bool socKnown = false;
+  bool socHasTimeToEmpty = false;
+  double? socPercent;
+  int? socTimeToEmptySeconds;
+  double socCapacityAh = 0;
+  double socChargedVoltage = 0;
 
   void update(DashboardPacketV1 packet) {
     switch (packet.type) {
@@ -242,6 +258,15 @@ class DashboardSnapshot {
         wifiMdnsReady = packet.wifiMdnsReady;
         wifiStationIp =
             packet.wifiStationConnected ? packet.wifiStationIp : null;
+        break;
+      case DashboardPacketType.stateOfCharge:
+        socKnown = packet.socKnown;
+        socHasTimeToEmpty = packet.socHasTimeToEmpty;
+        socPercent = packet.socKnown ? packet.socPercent : null;
+        socTimeToEmptySeconds =
+            packet.socHasTimeToEmpty ? packet.socTimeToEmptySeconds : null;
+        socCapacityAh = packet.socCapacityAh;
+        socChargedVoltage = packet.socChargedVoltage;
         break;
     }
   }

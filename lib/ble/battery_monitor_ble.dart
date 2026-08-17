@@ -30,6 +30,14 @@ abstract interface class BatteryMonitorBleClient {
 
   Future<void> clearWifi(String deviceId);
 
+  Future<void> saveBatteryProfile(
+    String deviceId,
+    double capacityAh,
+    double chargedVoltage,
+  );
+
+  Future<void> syncBatteryFull(String deviceId);
+
   Future<String> deviceInfo(String deviceId);
 
   Future<void> installFirmware(
@@ -179,6 +187,31 @@ class BatteryMonitorBle implements BatteryMonitorBleClient {
 
   @override
   Future<void> clearWifi(String deviceId) => sendControl(deviceId, const [8]);
+
+  @override
+  Future<void> saveBatteryProfile(
+    String deviceId,
+    double capacityAh,
+    double chargedVoltage,
+  ) async {
+    if (!capacityAh.isFinite || capacityAh <= 0 || capacityAh > 10000) {
+      throw ArgumentError.value(
+          capacityAh, 'capacityAh', 'Must be in (0, 10000] Ah.');
+    }
+    if (!chargedVoltage.isFinite || chargedVoltage <= 0 || chargedVoltage > 100) {
+      throw ArgumentError.value(
+          chargedVoltage, 'chargedVoltage', 'Must be in (0, 100] V.');
+    }
+    final payload = ByteData(7)
+      ..setUint8(0, 9)
+      ..setUint32(1, (capacityAh * 1000).round(), Endian.little)
+      ..setUint16(5, (chargedVoltage * 1000).round(), Endian.little);
+    await sendControl(deviceId, payload.buffer.asUint8List());
+  }
+
+  @override
+  Future<void> syncBatteryFull(String deviceId) =>
+      sendControl(deviceId, const [10]);
 
   @override
   Future<String> deviceInfo(String deviceId) async {
