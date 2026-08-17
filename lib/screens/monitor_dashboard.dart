@@ -234,6 +234,9 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
         } else if (GithubReleaseChecker.isNewer(release.version, installed)) {
           _firmwareTransferStatus =
               'Firmware update available: v$installed → v${release.version}. Download it to prepare BLE installation.';
+        } else if (GithubReleaseChecker.isNewer(installed, release.version)) {
+          _firmwareTransferStatus =
+              'Installed monitor firmware v$installed is newer than the latest published v${release.version}.';
         } else {
           _firmwareTransferStatus =
               'Monitor firmware v$installed is up to date.';
@@ -1772,9 +1775,13 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
     if (release == null) {
       return 'Monitor firmware v$installed. Check for updates to compare versions.';
     }
-    return _firmwareUpdateAvailable
-        ? 'Update available: v$installed → v${release.version}'
-        : 'Monitor firmware v$installed is up to date.';
+    if (_firmwareUpdateAvailable) {
+      return 'Update available: v$installed → v${release.version}';
+    }
+    if (GithubReleaseChecker.isNewer(installed, release.version)) {
+      return 'Installed firmware v$installed is newer than the latest published v${release.version}.';
+    }
+    return 'Monitor firmware v$installed is up to date.';
   }
 
   Widget _calibrationSection(BuildContext context) {
