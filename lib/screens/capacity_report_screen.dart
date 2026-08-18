@@ -16,11 +16,13 @@ class CapacityReportScreen extends StatefulWidget {
     required this.summary,
     required this.entries,
     this.deviceInfo,
+    this.temperatureFahrenheit = false,
   });
 
   final TestSessionSummary summary;
   final List<SessionLogEntry> entries;
   final String? deviceInfo;
+  final bool temperatureFahrenheit;
 
   @override
   State<CapacityReportScreen> createState() => _CapacityReportScreenState();
@@ -258,9 +260,9 @@ class _CapacityReportScreenState extends State<CapacityReportScreen> {
                 _detailRow('Current range',
                     _minMax(widget.summary.currentMinAmps, widget.summary.currentMaxAmps, 'A')),
                 _detailRow('Temperature range', _minMax(
-                    widget.summary.temperatureMinCelsius,
-                    widget.summary.temperatureMaxCelsius,
-                    '°C')),
+                    _displayTemp(widget.summary.temperatureMinCelsius),
+                    _displayTemp(widget.summary.temperatureMaxCelsius),
+                    widget.temperatureFahrenheit ? '°F' : '°C')),
               ],
             ),
           ),
@@ -268,6 +270,10 @@ class _CapacityReportScreenState extends State<CapacityReportScreen> {
       ),
     );
   }
+
+  double? _displayTemp(double? celsius) => celsius == null
+      ? null
+      : (widget.temperatureFahrenheit ? celsius * 9 / 5 + 32 : celsius);
 
   Widget _detailRow(String label, String value) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 3),

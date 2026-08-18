@@ -16,6 +16,7 @@ import 'package:battery_monitor_app/updates/github_release_checker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class MonitorDashboard extends StatefulWidget {
   MonitorDashboard({
@@ -58,6 +59,8 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
   final _batteryCapacityController = TextEditingController();
   final _batteryChargedVoltageController = TextEditingController();
   bool _protectionEnabledField = false;
+  bool _temperatureFahrenheit = false;
+  static const _temperatureUnitPrefKey = 'temperature_unit_fahrenheit';
   final _protectionLowVoltageController = TextEditingController();
   final _protectionLowSocController = TextEditingController();
 
@@ -100,6 +103,12 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
   bool get _supportsSoc => _deviceInfo?.contains('soc1') ?? false;
   bool get _supportsProtection =>
       _deviceInfo?.contains('protection1') ?? false;
+  String get _temperatureUnitLabel => _temperatureFahrenheit ? 'deg F' : 'deg C';
+  double? _displayTemperature(double? celsius) => celsius == null
+      ? null
+      : (_temperatureFahrenheit ? celsius * 9 / 5 + 32 : celsius);
+  double _temperatureToCelsius(double value) =>
+      _temperatureFahrenheit ? (value - 32) * 5 / 9 : value;
   String get _monitorFirmwareVersion =>
       RegExp(r'FW=([^;]+)').firstMatch(_deviceInfo ?? '')?.group(1) ??
       'Reading...';
@@ -133,6 +142,26 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
   void initState() {
     super.initState();
     _loadAlarms();
+    _loadTemperatureUnit();
+  }
+
+  Future<void> _loadTemperatureUnit() async {
+    final preferences = await SharedPreferences.getInstance();
+    final fahrenheit = preferences.getBool(_temperatureUnitPrefKey) ?? false;
+    if (!mounted) return;
+    setState(() => _temperatureFahrenheit = fahrenheit);
+  }
+
+  Future<void> _toggleTemperatureUnit() async {
+    setState(() => _temperatureFahrenheit = !_temperatureFahrenheit);
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setBool(_temperatureUnitPrefKey, _temperatureFahrenheit);
+    if (!mounted) return;
+    setState(() {
+      _temperatureAlarmController.text =
+          _displayTemperature(_alarmSettings.maxTemperature)!
+              .toStringAsFixed(1);
+    });
   }
 
   @override
@@ -582,7 +611,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
       _currentAlarmController.text =
           settings.maxAbsoluteCurrent.toStringAsFixed(3);
       _temperatureAlarmController.text =
-          settings.maxTemperature.toStringAsFixed(1);
+          _displayTemperature(settings.maxTemperature)!.toStringAsFixed(1);
     });
   }
 
@@ -590,7 +619,9 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
     final low = double.tryParse(_lowVoltageAlarmController.text);
     final high = double.tryParse(_highVoltageAlarmController.text);
     final current = double.tryParse(_currentAlarmController.text);
-    final temperature = double.tryParse(_temperatureAlarmController.text);
+    final temperatureInput = double.tryParse(_temperatureAlarmController.text);
+    final temperature =
+        temperatureInput == null ? null : _temperatureToCelsius(temperatureInput);
     if (low == null ||
         high == null ||
         current == null ||
@@ -1343,6 +1374,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
                     summary: summary,
                     entries: _sessionLog.entries,
                     deviceInfo: _deviceInfo,
+                    temperatureFahrenheit: _temperatureFahrenheit,
                   ),
                 ));
               },
@@ -1383,7 +1415,21 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Battery Monitor')),
+      appBar: AppBar(
+        title: const Text('Battery Monitor'),
+        actions: [
+          TextButton(
+            onPressed: _toggleTemperatureUnit,
+            child: Text(
+              _temperatureFahrenheit ? 'Show °C' : 'Show °F',
+              style: TextStyle(
+                color: Theme.of(context).appBarTheme.foregroundColor ??
+                    Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -1650,7 +1696,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
     _currentAlarmController.text =
         _alarmSettings.maxAbsoluteCurrent.toStringAsFixed(3);
     _temperatureAlarmController.text =
-        _alarmSettings.maxTemperature.toStringAsFixed(1);
+        _displayTemperature(_alarmSettings.maxTemperature)!.toStringAsFixed(1);
   }
 
   List<String> get _visibleAlarmMessages {
@@ -1726,7 +1772,8 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
                           _alarmSettings.copyWith(temperatureEnabled: v);
                       _alarmSettingsDirty = true;
                     })),
-            _alarmField(_temperatureAlarmController, 'Temperature limit (C)'),
+            _alarmField(_temperatureAlarmController,
+                'Temperature limit (${_temperatureFahrenheit ? 'F' : 'C'})'),
             _alarmToggle(
                 'INA228 health',
                 _alarmSettings.sensorHealthEnabled,
@@ -1764,7 +1811,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
       child: Column(
         children: [
           _valueRow('Temperature',
-              '${_format(_telemetry?.validTemperatureCelsius, 'deg C')}  ${_minMax(_dashboard.temperatureMinCelsius, _dashboard.temperatureMaxCelsius, 'deg C')}'),
+              '${_format(_displayTemperature(_telemetry?.validTemperatureCelsius), _temperatureUnitLabel)}  ${_minMax(_displayTemperature(_dashboard.temperatureMinCelsius), _displayTemperature(_dashboard.temperatureMaxCelsius), _temperatureUnitLabel)}'),
           _valueRow('Shunt voltage',
               '${_formatNanoVolts(_dashboard.lastShuntVoltageNanoVolts)}  ${_minMaxNanoVolts(_dashboard.shuntMinNanoVolts, _dashboard.shuntMaxNanoVolts)}'),
         ],

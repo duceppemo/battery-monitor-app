@@ -63,6 +63,17 @@ export, or the monitor's Ah/Wh counters.
 Changing modes clears the previous filter state, so the first displayed sample
 in the newly selected mode is always current rather than an old value.
 
+## Temperature unit
+
+A "Show °F"/"Show °C" button in the app bar toggles the displayed
+temperature unit everywhere it appears: the live value, min/max, the
+capacity test report's temperature range, and the alarm temperature
+threshold field. The preference persists locally (`shared_preferences`)
+across app restarts. This is purely a display choice — the BLE protocol,
+the monitor's stored alarm threshold and the app's local `AlarmSettings`
+model all stay in Celsius; the app converts to Celsius before sending an
+alarm save and back to the display unit when showing a stored value.
+
 ## Test-session event timeline
 
 Each recording test keeps a compact local event timeline alongside its raw
