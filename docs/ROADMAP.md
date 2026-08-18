@@ -107,3 +107,14 @@
   overwrite on the next connect. Verified live: fresh app open shows an
   outlined Connect button and a disabled Rename until a scan confirms
   presence.
+- [x] Fixed a real regression in the above, caught by testing against an
+  actually-unreachable monitor rather than trusting the first fix: after a
+  failed connection attempt the Connect button went back to filled/green
+  even though the monitor was still unreachable. Cause: `_selectedDeviceId`
+  is deliberately never cleared when a connection attempt fails (only on an
+  explicit disconnect), which the "confirmed present" check was using
+  `isSelected` as an unsafe proxy for. Fixed by gating on `isConnectingThis`
+  (true only while an attempt is actively in flight) instead. Verified live
+  by holding the monitor's only BLE connection slot open from a separate
+  client so a real connection attempt from the app would genuinely fail,
+  then confirming the button stayed outlined afterward.

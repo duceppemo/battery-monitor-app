@@ -1697,19 +1697,25 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
   Widget _savedMonitorCard(BuildContext context, SavedMonitor monitor) {
     final isSelected = monitor.lastDeviceAddress == _selectedDeviceId;
     final isDisconnect = isSelected && _isConnected;
+    // _selectedDeviceId is deliberately NOT cleared when a connection
+    // attempt fails (only on an explicit disconnect) -- that's fine for
+    // the label logic below, which also gates on _isConnecting/_isConnected
+    // and so naturally reverts to "Connect" once the attempt settles. But
+    // it means isSelected alone is NOT a safe proxy for "confirmed
+    // present": right after a failed attempt it's still true even though
+    // the monitor is still unreachable. Use isConnectingThis (true only
+    // while an attempt is actively in flight) instead.
+    final isConnectingThis = isSelected && _isConnecting;
     // A saved entry is just a memory of a past connection -- it says
     // nothing about whether the monitor is actually in range right now.
     // Only a scan (or already being connected/connecting to it) confirms
     // that, so the Connect button stays low-emphasis until then rather
     // than looking equally "ready" as a monitor we just found.
     final confirmedPresent = _devices.containsKey(monitor.lastDeviceAddress);
-    final label = isDisconnect
-        ? 'Disconnect'
-        : isSelected && _isConnecting
-            ? 'Connecting...'
-            : 'Connect';
+    final label =
+        isDisconnect ? 'Disconnect' : isConnectingThis ? 'Connecting...' : 'Connect';
     final connectPressed =
-        isSelected && _isConnecting ? null : () => _connectSaved(monitor);
+        isConnectingThis ? null : () => _connectSaved(monitor);
     return Card(
       child: ListTile(
         leading: Icon(
@@ -1728,7 +1734,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
                 onPressed: _disconnect,
                 child: const Text('Disconnect'),
               )
-            else if (confirmedPresent || isSelected)
+            else if (confirmedPresent || isConnectingThis)
               FilledButton(onPressed: connectPressed, child: Text(label))
             else
               OutlinedButton(onPressed: connectPressed, child: Text(label)),
