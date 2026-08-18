@@ -97,3 +97,13 @@
   (firmware fix: Device Information's `NAME=` field was only rebuilt on
   the normal one-second publish cycle, so a client re-reading it right
   after an acknowledged rename could still catch a stale value).
+- [x] Two saved-monitors UI fixes from feedback after the above shipped:
+  a saved entry's Connect button is only filled/prominent once a scan has
+  actually confirmed the monitor is in range (or it's already
+  connected/connecting) rather than looking equally "ready" purely because
+  it's remembered; and Rename is only offered while connected to that
+  specific monitor, since doing it while disconnected only relabels this
+  phone's local copy, which a `name1`-authoritative monitor would silently
+  overwrite on the next connect. Verified live: fresh app open shows an
+  outlined Connect button and a disabled Rename until a scan confirms
+  presence.

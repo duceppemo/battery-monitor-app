@@ -1697,11 +1697,19 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
   Widget _savedMonitorCard(BuildContext context, SavedMonitor monitor) {
     final isSelected = monitor.lastDeviceAddress == _selectedDeviceId;
     final isDisconnect = isSelected && _isConnected;
+    // A saved entry is just a memory of a past connection -- it says
+    // nothing about whether the monitor is actually in range right now.
+    // Only a scan (or already being connected/connecting to it) confirms
+    // that, so the Connect button stays low-emphasis until then rather
+    // than looking equally "ready" as a monitor we just found.
+    final confirmedPresent = _devices.containsKey(monitor.lastDeviceAddress);
     final label = isDisconnect
         ? 'Disconnect'
         : isSelected && _isConnecting
             ? 'Connecting...'
             : 'Connect';
+    final connectPressed =
+        isSelected && _isConnecting ? null : () => _connectSaved(monitor);
     return Card(
       child: ListTile(
         leading: Icon(
@@ -1715,25 +1723,33 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            isDisconnect
-                ? OutlinedButton(
-                    onPressed: _disconnect,
-                    child: const Text('Disconnect'),
-                  )
-                : FilledButton(
-                    onPressed: isSelected && _isConnecting
-                        ? null
-                        : () => _connectSaved(monitor),
-                    child: Text(label),
-                  ),
+            if (isDisconnect)
+              OutlinedButton(
+                onPressed: _disconnect,
+                child: const Text('Disconnect'),
+              )
+            else if (confirmedPresent || isSelected)
+              FilledButton(onPressed: connectPressed, child: Text(label))
+            else
+              OutlinedButton(onPressed: connectPressed, child: Text(label)),
             PopupMenuButton<String>(
               onSelected: (action) {
                 if (action == 'rename') _renameSavedMonitor(monitor);
                 if (action == 'forget') _forgetSavedMonitor(monitor);
               },
-              itemBuilder: (context) => const [
-                PopupMenuItem(value: 'rename', child: Text('Rename')),
-                PopupMenuItem(value: 'forget', child: Text('Forget')),
+              itemBuilder: (context) => [
+                // Renaming while disconnected only relabels this phone's
+                // local copy; for a name1-authoritative monitor that gets
+                // overwritten by the real name on the next connect, so the
+                // rename would silently appear to revert. Simplest correct
+                // rule: only offer it while actually connected to this
+                // monitor, regardless of firmware capability.
+                PopupMenuItem(
+                  value: 'rename',
+                  enabled: isSelected && _isConnected,
+                  child: const Text('Rename'),
+                ),
+                const PopupMenuItem(value: 'forget', child: Text('Forget')),
               ],
             ),
           ],
