@@ -19,7 +19,7 @@ download and install.
 
 ## Current milestone
 
-The current app version is `0.3.8+17`. It provides a focused, foreground BLE
+The current app version is `0.3.9+18`. It provides a focused, foreground BLE
 companion for one monitor at a time:
 
 1. Service-filtered scan, connection lifecycle and an active disconnect action.
@@ -51,6 +51,12 @@ companion for one monitor at a time:
     discharge rate, a pass/fail verdict against a configurable threshold, and
     a shareable plain-text summary. Entirely app-local and firmware-version
     independent — it's computed from data the session log already captures.
+11. Load-protection relay control on firmware 0.5.10+ (`protection1`): enable
+    a low-voltage/low-SoC cutoff, reconnect after a trip (rejected while the
+    trigger condition is still active), and bench-test force-connect/
+    force-disconnect controls that bypass every threshold to verify the
+    relay wiring itself. Mirrors the Web Dashboard's card exactly, so either
+    transport can configure or test it.
 
 The firmware/app compatibility contract is
 [docs/BLE_PROTOCOL.md](docs/BLE_PROTOCOL.md). Treat a protocol change as a

@@ -40,6 +40,19 @@ abstract interface class BatteryMonitorBleClient {
 
   Future<void> resetBatteryHistory(String deviceId);
 
+  Future<void> saveLoadProtection(
+    String deviceId, {
+    required bool enabled,
+    required double lowVoltageThreshold,
+    required double lowSocPercentThreshold,
+  });
+
+  Future<void> reconnectLoad(String deviceId);
+
+  Future<void> testConnectLoad(String deviceId);
+
+  Future<void> testDisconnectLoad(String deviceId);
+
   Future<String> deviceInfo(String deviceId);
 
   Future<void> installFirmware(
@@ -218,6 +231,45 @@ class BatteryMonitorBle implements BatteryMonitorBleClient {
   @override
   Future<void> resetBatteryHistory(String deviceId) =>
       sendControl(deviceId, const [11]);
+
+  @override
+  Future<void> saveLoadProtection(
+    String deviceId, {
+    required bool enabled,
+    required double lowVoltageThreshold,
+    required double lowSocPercentThreshold,
+  }) async {
+    if (!lowVoltageThreshold.isFinite ||
+        lowVoltageThreshold < 0 ||
+        lowVoltageThreshold > 100) {
+      throw ArgumentError.value(
+          lowVoltageThreshold, 'lowVoltageThreshold', 'Must be in [0, 100] V.');
+    }
+    if (!lowSocPercentThreshold.isFinite ||
+        lowSocPercentThreshold < 0 ||
+        lowSocPercentThreshold > 100) {
+      throw ArgumentError.value(lowSocPercentThreshold,
+          'lowSocPercentThreshold', 'Must be in [0, 100]%.');
+    }
+    final payload = ByteData(5)
+      ..setUint8(0, 12)
+      ..setUint8(1, enabled ? 1 : 0)
+      ..setUint16(2, (lowVoltageThreshold * 1000).round(), Endian.little)
+      ..setUint16(4, (lowSocPercentThreshold * 10).round(), Endian.little);
+    await sendControl(deviceId, payload.buffer.asUint8List());
+  }
+
+  @override
+  Future<void> reconnectLoad(String deviceId) =>
+      sendControl(deviceId, const [13]);
+
+  @override
+  Future<void> testConnectLoad(String deviceId) =>
+      sendControl(deviceId, const [14]);
+
+  @override
+  Future<void> testDisconnectLoad(String deviceId) =>
+      sendControl(deviceId, const [15]);
 
   @override
   Future<String> deviceInfo(String deviceId) async {

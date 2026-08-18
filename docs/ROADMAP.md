@@ -50,6 +50,10 @@
   summary) generated from a finished test session's own local log. Validated
   against synthetic session data only so far — not yet against a real
   controlled discharge test.
+- [x] Add BLE control for the load-protection relay on firmware 0.5.10+
+  (`protection1`): save thresholds/enable, reconnect after a trip, and
+  bench-test force-connect/force-disconnect. Verified end-to-end against
+  real SSR hardware.
 
 ## Later
 

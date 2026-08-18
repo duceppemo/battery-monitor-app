@@ -73,6 +73,23 @@ class _FakeBatteryMonitorBle implements BatteryMonitorBleClient {
   Future<void> resetBatteryHistory(String deviceId) async {}
 
   @override
+  Future<void> saveLoadProtection(
+    String deviceId, {
+    required bool enabled,
+    required double lowVoltageThreshold,
+    required double lowSocPercentThreshold,
+  }) async {}
+
+  @override
+  Future<void> reconnectLoad(String deviceId) async {}
+
+  @override
+  Future<void> testConnectLoad(String deviceId) async {}
+
+  @override
+  Future<void> testDisconnectLoad(String deviceId) async {}
+
+  @override
   Future<String> deviceInfo(String deviceId) async => '';
 
   @override

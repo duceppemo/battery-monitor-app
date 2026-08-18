@@ -57,6 +57,9 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
   final _wifiPasswordController = TextEditingController();
   final _batteryCapacityController = TextEditingController();
   final _batteryChargedVoltageController = TextEditingController();
+  bool _protectionEnabledField = false;
+  final _protectionLowVoltageController = TextEditingController();
+  final _protectionLowSocController = TextEditingController();
 
   StreamSubscription<DiscoveredDevice>? _scanSubscription;
   StreamSubscription<ConnectionStateUpdate>? _connectionSubscription;
@@ -70,6 +73,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
   String? _deviceInfo;
   bool _calibrationFieldsInitialized = false;
   bool _batteryProfileFieldsInitialized = false;
+  bool _protectionFieldsInitialized = false;
   bool _finalShuntPresetSelected = false;
   int? _lastMonitorUptimeSeconds;
   Timer? _demoTimer;
@@ -94,6 +98,8 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
       _deviceInfo?.contains('control1') ?? false;
   bool get _supportsBleWifi => _deviceInfo?.contains('wifi1') ?? false;
   bool get _supportsSoc => _deviceInfo?.contains('soc1') ?? false;
+  bool get _supportsProtection =>
+      _deviceInfo?.contains('protection1') ?? false;
   String get _monitorFirmwareVersion =>
       RegExp(r'FW=([^;]+)').firstMatch(_deviceInfo ?? '')?.group(1) ??
       'Reading...';
@@ -146,6 +152,8 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
     _temperatureAlarmController.dispose();
     _wifiSsidController.dispose();
     _wifiPasswordController.dispose();
+    _protectionLowVoltageController.dispose();
+    _protectionLowSocController.dispose();
     _batteryCapacityController.dispose();
     _batteryChargedVoltageController.dispose();
     super.dispose();
@@ -470,6 +478,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
       _deviceInfo = null;
       _calibrationFieldsInitialized = false;
       _batteryProfileFieldsInitialized = false;
+      _protectionFieldsInitialized = false;
       _status =
           'Connecting to ${device.name.isEmpty ? device.id : device.name}...';
     });
@@ -724,6 +733,16 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
             _batteryChargedVoltageController.text =
                 _dashboard.socChargedVoltage.toStringAsFixed(3);
           }
+          if (packet.type == DashboardPacketType.loadProtection &&
+              !_protectionFieldsInitialized) {
+            _protectionFieldsInitialized = true;
+            _protectionEnabledField = _dashboard.protectionEnabled;
+            _protectionLowVoltageController.text =
+                _dashboard.protectionLowVoltageThreshold.toStringAsFixed(3);
+            _protectionLowSocController.text = _dashboard
+                .protectionLowSocPercentThreshold
+                .toStringAsFixed(1);
+          }
         });
       },
       onError: (Object error) {
@@ -907,6 +926,126 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
     } on Object catch (error) {
       if (mounted) _showMessage('Unable to reset battery history: $error');
     }
+  }
+
+  Future<void> _saveLoadProtection() async {
+    final deviceId = _selectedDeviceId;
+    if (!_canControl || deviceId == null) return;
+    if (!_supportsProtection) {
+      _showMessage('Update the monitor firmware for load protection.');
+      return;
+    }
+    final lowVoltage = double.tryParse(_protectionLowVoltageController.text);
+    final lowSocPercent = double.tryParse(_protectionLowSocController.text);
+    if (lowVoltage == null || !lowVoltage.isFinite || lowVoltage < 0 || lowVoltage > 100) {
+      _showMessage('Enter a valid low-voltage cutoff (0-100 V).');
+      return;
+    }
+    if (lowSocPercent == null ||
+        !lowSocPercent.isFinite ||
+        lowSocPercent < 0 ||
+        lowSocPercent > 100) {
+      _showMessage('Enter a valid low-SoC cutoff (0-100%).');
+      return;
+    }
+    if (_protectionEnabledField &&
+        !await _confirm(
+          'Enable load protection?',
+          'The load will disconnect automatically once voltage drops below '
+              '${lowVoltage.toStringAsFixed(2)} V or SoC drops below '
+              '${lowSocPercent.toStringAsFixed(1)}%, and will stay '
+              'disconnected until you reconnect it.',
+        )) {
+      return;
+    }
+    try {
+      await widget.ble.saveLoadProtection(
+        deviceId,
+        enabled: _protectionEnabledField,
+        lowVoltageThreshold: lowVoltage,
+        lowSocPercentThreshold: lowSocPercent,
+      );
+      if (mounted) _showMessage('Load protection settings saved.');
+    } on Object catch (error) {
+      if (mounted) {
+        _showMessage('Load protection settings were not saved: $error');
+      }
+    }
+  }
+
+  Future<void> _reconnectLoad() async {
+    final deviceId = _selectedDeviceId;
+    if (!_canControl || deviceId == null) return;
+    if (!await _confirm(
+      'Reconnect the load?',
+      'This is rejected if voltage or SoC is still below the configured threshold.',
+    )) {
+      return;
+    }
+    try {
+      await widget.ble.reconnectLoad(deviceId);
+      if (mounted) _showMessage('Load reconnected.');
+    } on Object catch (error) {
+      if (mounted) {
+        _showMessage(
+            'Reconnect was rejected (condition may still be active): $error');
+      }
+    }
+  }
+
+  Future<void> _testConnectLoad() async {
+    final deviceId = _selectedDeviceId;
+    if (!_canControl || deviceId == null) return;
+    if (!await _confirm(
+      'Bench test: force connect?',
+      'Forces the relay closed (load connected) right now, bypassing every threshold.',
+    )) {
+      return;
+    }
+    try {
+      await widget.ble.testConnectLoad(deviceId);
+      if (mounted) _showMessage('Relay forced closed (test).');
+    } on Object catch (error) {
+      if (mounted) _showMessage('Unable to force connect: $error');
+    }
+  }
+
+  Future<void> _testDisconnectLoad() async {
+    final deviceId = _selectedDeviceId;
+    if (!_canControl || deviceId == null) return;
+    if (!await _confirm(
+      'Bench test: force disconnect?',
+      'Forces the relay open (load disconnected) right now, bypassing every threshold.',
+    )) {
+      return;
+    }
+    try {
+      await widget.ble.testDisconnectLoad(deviceId);
+      if (mounted) _showMessage('Relay forced open (test).');
+    } on Object catch (error) {
+      if (mounted) _showMessage('Unable to force disconnect: $error');
+    }
+  }
+
+  Future<bool> _confirm(String title, String content) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(content),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+    return confirmed == true && mounted;
   }
 
   void _captureZero() {
@@ -1266,6 +1405,8 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
             _sessionSection(context),
             const SizedBox(height: 12),
             _batterySection(context),
+            const SizedBox(height: 12),
+            _protectionSection(context),
             const SizedBox(height: 12),
             _logSection(context),
             const SizedBox(height: 12),
@@ -2044,6 +2185,96 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
               TextButton(
                 onPressed: _canControl ? _resetBatteryHistory : null,
                 child: const Text('Reset history'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _protectionSection(BuildContext context) {
+    final tripped = _dashboard.protectionTripped;
+    final breachFlags = _dashboard.protectionBreachFlags;
+    final tripFlags = _dashboard.protectionTripFlags;
+    String reasonText(int flags) {
+      final reasons = <String>[
+        if (flags & 1 != 0) 'low voltage',
+        if (flags & 2 != 0) 'low SoC',
+        if (flags & 4 != 0) 'manual test',
+      ];
+      return reasons.join(' + ');
+    }
+
+    final subtitle = !_dashboard.protectionEnabled
+        ? 'Disabled; relay stays connected.'
+        : !_dashboard.protectionRelayEngaged
+            ? 'DISCONNECTED (${reasonText(tripFlags)})'
+                '${breachFlags != 0 ? ' — condition still active' : ' — condition clear, safe to reconnect'}'
+            : 'Connected; monitoring for low voltage/SoC.';
+    return Card(
+      color: tripped ? Theme.of(context).colorScheme.errorContainer : null,
+      child: ExpansionTile(
+        title: const Text('Load protection relay'),
+        subtitle: Text(subtitle),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        children: [
+          const Text(
+            'Disconnects a relay/SSR-switched load once voltage or state of '
+            'charge drops below the thresholds below. Disabled by default '
+            'and has no effect until enabled here. Once tripped, the load '
+            'stays disconnected until you reconnect it — it never '
+            'reconnects on its own.',
+          ),
+          const SizedBox(height: 10),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Enable load protection'),
+            value: _protectionEnabledField,
+            onChanged: (v) => setState(() => _protectionEnabledField = v),
+          ),
+          TextField(
+            controller: _protectionLowVoltageController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration:
+                const InputDecoration(labelText: 'Low voltage cutoff (V)'),
+          ),
+          TextField(
+            controller: _protectionLowSocController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(
+                labelText: 'Low state of charge cutoff (%)'),
+          ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton(
+                onPressed: _canControl ? _saveLoadProtection : null,
+                child: const Text('Save protection settings'),
+              ),
+              TextButton(
+                onPressed: _canControl ? _reconnectLoad : null,
+                child: const Text('Reconnect load'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Bench-test the relay wiring directly, regardless of the '
+            'settings above or whether protection is enabled:',
+          ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton(
+                onPressed: _canControl ? _testConnectLoad : null,
+                child: const Text('Test: force connect'),
+              ),
+              OutlinedButton(
+                onPressed: _canControl ? _testDisconnectLoad : null,
+                child: const Text('Test: force disconnect'),
               ),
             ],
           ),

@@ -123,4 +123,41 @@ void main() {
     expect(snapshot.socPercent, isNull);
     expect(snapshot.socTimeToEmptySeconds, isNull);
   });
+
+  test('decodes a tripped load-protection dashboard page', () {
+    final protection = Uint8List(20);
+    protection[0] = 0x19;
+    protection[1] = 0x05; // enabled + tripped, relay not engaged.
+    protection[2] = 0x01; // tripped on low voltage.
+    protection[3] = 0x01; // still breaching low voltage right now.
+    ByteData.sublistView(protection)
+      ..setUint16(4, 3000, Endian.little) // 3.000 V threshold.
+      ..setUint16(6, 200, Endian.little); // 20.0% threshold.
+
+    final snapshot =
+        DashboardSnapshot()..update(DashboardPacketV1.decode(protection));
+
+    expect(snapshot.protectionEnabled, isTrue);
+    expect(snapshot.protectionRelayEngaged, isFalse);
+    expect(snapshot.protectionTripped, isTrue);
+    expect(snapshot.protectionTripFlags, 1);
+    expect(snapshot.protectionBreachFlags, 1);
+    expect(snapshot.protectionLowVoltageThreshold, 3.0);
+    expect(snapshot.protectionLowSocPercentThreshold, 20.0);
+  });
+
+  test('decodes a disabled, connected load-protection dashboard page', () {
+    final protection = Uint8List(20);
+    protection[0] = 0x19;
+    protection[1] = 0x02; // disabled, relay engaged (connected), not tripped.
+
+    final snapshot =
+        DashboardSnapshot()..update(DashboardPacketV1.decode(protection));
+
+    expect(snapshot.protectionEnabled, isFalse);
+    expect(snapshot.protectionRelayEngaged, isTrue);
+    expect(snapshot.protectionTripped, isFalse);
+    expect(snapshot.protectionTripFlags, 0);
+    expect(snapshot.protectionBreachFlags, 0);
+  });
 }

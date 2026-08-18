@@ -12,6 +12,7 @@ enum DashboardPacketType {
   alarms,
   wifi,
   stateOfCharge,
+  loadProtection,
 }
 
 class DashboardPacketV1 {
@@ -26,6 +27,7 @@ class DashboardPacketV1 {
   static const _alarms = 0x16;
   static const _wifi = 0x17;
   static const _stateOfCharge = 0x18;
+  static const _loadProtection = 0x19;
 
   final DashboardPacketType type;
   final Uint8List _packet;
@@ -46,6 +48,7 @@ class DashboardPacketV1 {
       _alarms => DashboardPacketType.alarms,
       _wifi => DashboardPacketType.wifi,
       _stateOfCharge => DashboardPacketType.stateOfCharge,
+      _loadProtection => DashboardPacketType.loadProtection,
       final value =>
         throw FormatException('Unknown dashboard packet type $value.'),
     };
@@ -126,6 +129,16 @@ class DashboardPacketV1 {
   int get socFullChargeCycles => _data.getUint16(16, Endian.little);
   double get socAverageDischargeDepthPercent =>
       _data.getUint16(18, Endian.little) / 10.0;
+
+  bool get protectionEnabled => (_packet[1] & 1) != 0;
+  bool get protectionRelayEngaged => (_packet[1] & 2) != 0;
+  bool get protectionTripped => (_packet[1] & 4) != 0;
+  int get protectionTripFlags => _packet[2];
+  int get protectionBreachFlags => _packet[3];
+  double get protectionLowVoltageThreshold =>
+      _data.getUint16(4, Endian.little) / 1000.0;
+  double get protectionLowSocPercentThreshold =>
+      _data.getUint16(6, Endian.little) / 10.0;
 }
 
 /// The latest value of each independently rotating dashboard page.
@@ -185,6 +198,13 @@ class DashboardSnapshot {
   double socDeepestDischargePercent = 0;
   int socFullChargeCycles = 0;
   double? socAverageDischargeDepthPercent;
+  bool protectionEnabled = false;
+  bool protectionRelayEngaged = true;
+  bool protectionTripped = false;
+  int protectionTripFlags = 0;
+  int protectionBreachFlags = 0;
+  double protectionLowVoltageThreshold = 0;
+  double protectionLowSocPercentThreshold = 0;
 
   void update(DashboardPacketV1 packet) {
     switch (packet.type) {
@@ -280,6 +300,16 @@ class DashboardSnapshot {
         socAverageDischargeDepthPercent = packet.socFullChargeCycles > 0
             ? packet.socAverageDischargeDepthPercent
             : null;
+        break;
+      case DashboardPacketType.loadProtection:
+        protectionEnabled = packet.protectionEnabled;
+        protectionRelayEngaged = packet.protectionRelayEngaged;
+        protectionTripped = packet.protectionTripped;
+        protectionTripFlags = packet.protectionTripFlags;
+        protectionBreachFlags = packet.protectionBreachFlags;
+        protectionLowVoltageThreshold = packet.protectionLowVoltageThreshold;
+        protectionLowSocPercentThreshold =
+            packet.protectionLowSocPercentThreshold;
         break;
     }
   }
