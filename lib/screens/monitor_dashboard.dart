@@ -878,6 +878,36 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
     }
   }
 
+  Future<void> _resetBatteryHistory() async {
+    final deviceId = _selectedDeviceId;
+    if (!_canControl || deviceId == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reset battery history?'),
+        content: const Text(
+            'Clears deepest discharge, cycle count and average depth. Do this after replacing the physical battery. Current charge level is not affected.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Reset'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await widget.ble.resetBatteryHistory(deviceId);
+      if (mounted) _showMessage('Battery history reset.');
+    } on Object catch (error) {
+      if (mounted) _showMessage('Unable to reset battery history: $error');
+    }
+  }
+
   void _captureZero() {
     final average = _stableCalibrationAverage();
     if (average == null) {
@@ -1963,6 +1993,16 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
             '"Mark as fully charged" once you know it is full.',
           ),
           const SizedBox(height: 10),
+          _valueRow('Deepest discharge',
+              '${_dashboard.socDeepestDischargePercent.toStringAsFixed(1)}%'),
+          _valueRow(
+            'Full-charge cycles',
+            _dashboard.socAverageDischargeDepthPercent != null
+                ? '${_dashboard.socFullChargeCycles} '
+                    '(avg ${_dashboard.socAverageDischargeDepthPercent!.toStringAsFixed(1)}% depth)'
+                : '${_dashboard.socFullChargeCycles}',
+          ),
+          const SizedBox(height: 10),
           TextField(
             controller: _batteryCapacityController,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1986,6 +2026,10 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
               TextButton(
                 onPressed: _canControl ? _syncBatteryFull : null,
                 child: const Text('Mark as fully charged'),
+              ),
+              TextButton(
+                onPressed: _canControl ? _resetBatteryHistory : null,
+                child: const Text('Reset history'),
               ),
             ],
           ),

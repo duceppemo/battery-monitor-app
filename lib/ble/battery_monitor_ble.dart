@@ -38,6 +38,8 @@ abstract interface class BatteryMonitorBleClient {
 
   Future<void> syncBatteryFull(String deviceId);
 
+  Future<void> resetBatteryHistory(String deviceId);
+
   Future<String> deviceInfo(String deviceId);
 
   Future<void> installFirmware(
@@ -212,6 +214,10 @@ class BatteryMonitorBle implements BatteryMonitorBleClient {
   @override
   Future<void> syncBatteryFull(String deviceId) =>
       sendControl(deviceId, const [10]);
+
+  @override
+  Future<void> resetBatteryHistory(String deviceId) =>
+      sendControl(deviceId, const [11]);
 
   @override
   Future<String> deviceInfo(String deviceId) async {

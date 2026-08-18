@@ -121,6 +121,11 @@ class DashboardPacketV1 {
   int get socTimeToEmptySeconds => _data.getUint32(4, Endian.little);
   double get socCapacityAh => _data.getUint32(8, Endian.little) / 1000.0;
   double get socChargedVoltage => _data.getUint16(12, Endian.little) / 1000.0;
+  double get socDeepestDischargePercent =>
+      _data.getUint16(14, Endian.little) / 10.0;
+  int get socFullChargeCycles => _data.getUint16(16, Endian.little);
+  double get socAverageDischargeDepthPercent =>
+      _data.getUint16(18, Endian.little) / 10.0;
 }
 
 /// The latest value of each independently rotating dashboard page.
@@ -177,6 +182,9 @@ class DashboardSnapshot {
   int? socTimeToEmptySeconds;
   double socCapacityAh = 0;
   double socChargedVoltage = 0;
+  double socDeepestDischargePercent = 0;
+  int socFullChargeCycles = 0;
+  double? socAverageDischargeDepthPercent;
 
   void update(DashboardPacketV1 packet) {
     switch (packet.type) {
@@ -267,6 +275,11 @@ class DashboardSnapshot {
             packet.socHasTimeToEmpty ? packet.socTimeToEmptySeconds : null;
         socCapacityAh = packet.socCapacityAh;
         socChargedVoltage = packet.socChargedVoltage;
+        socDeepestDischargePercent = packet.socDeepestDischargePercent;
+        socFullChargeCycles = packet.socFullChargeCycles;
+        socAverageDischargeDepthPercent = packet.socFullChargeCycles > 0
+            ? packet.socAverageDischargeDepthPercent
+            : null;
         break;
     }
   }

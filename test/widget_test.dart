@@ -70,6 +70,9 @@ class _FakeBatteryMonitorBle implements BatteryMonitorBleClient {
   Future<void> syncBatteryFull(String deviceId) async {}
 
   @override
+  Future<void> resetBatteryHistory(String deviceId) async {}
+
+  @override
   Future<String> deviceInfo(String deviceId) async => '';
 
   @override

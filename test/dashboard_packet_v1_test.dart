@@ -79,7 +79,10 @@ void main() {
       ..setUint16(2, 725, Endian.little) // 72.5%.
       ..setUint32(4, 3600, Endian.little) // 1 hour to empty.
       ..setUint32(8, 100000, Endian.little) // 100 Ah capacity.
-      ..setUint16(12, 14400, Endian.little); // 14.4 V charged.
+      ..setUint16(12, 14400, Endian.little) // 14.4 V charged.
+      ..setUint16(14, 350, Endian.little) // 35.0% deepest discharge.
+      ..setUint16(16, 12, Endian.little) // 12 full-charge cycles.
+      ..setUint16(18, 280, Endian.little); // 28.0% average depth.
 
     final snapshot = DashboardSnapshot()..update(DashboardPacketV1.decode(soc));
 
@@ -89,6 +92,23 @@ void main() {
     expect(snapshot.socTimeToEmptySeconds, 3600);
     expect(snapshot.socCapacityAh, 100.0);
     expect(snapshot.socChargedVoltage, 14.4);
+    expect(snapshot.socDeepestDischargePercent, 35.0);
+    expect(snapshot.socFullChargeCycles, 12);
+    expect(snapshot.socAverageDischargeDepthPercent, 28.0);
+  });
+
+  test('omits average discharge depth when there are no cycles yet', () {
+    final soc = Uint8List(20);
+    soc[0] = 0x18;
+    soc[1] = 0x01; // known, not discharging.
+    ByteData.sublistView(soc)
+      ..setUint16(16, 0, Endian.little) // 0 cycles.
+      ..setUint16(18, 999, Endian.little); // garbage average; must be ignored.
+
+    final snapshot = DashboardSnapshot()..update(DashboardPacketV1.decode(soc));
+
+    expect(snapshot.socFullChargeCycles, 0);
+    expect(snapshot.socAverageDischargeDepthPercent, isNull);
   });
 
   test('omits state-of-charge percent and time-to-empty when not synced', () {

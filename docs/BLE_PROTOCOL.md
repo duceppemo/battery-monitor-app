@@ -72,7 +72,7 @@ uses fixed 20-byte little-endian pages so the initial ATT MTU is sufficient:
 | UUID suffix | Access | Purpose |
 | --- | --- | --- |
 | `000a-9c65-4d3d-bdd5-8f4c6b2e1000` | Read, Notify | Rotating dashboard pages: extrema (`0x11`), directional energy (`0x12`), state (`0x13`), calibration (`0x14`), shunt/config (`0x15`), alarms (`0x16`), Wi-Fi station status (`0x17`) and state of charge (`0x18`). See the firmware repository's `docs/BLE_PROTOCOL.md` for the byte layout. |
-| `000b-9c65-4d3d-bdd5-8f4c6b2e1000` | Write with response | Dashboard controls. Commands: `1` reset extrema, `2` reset session energy, `3` toggle OLED, `4` save calibration, `5` restore default calibration, `6` save alarms, `7` save Wi-Fi station credentials, `8` clear Wi-Fi station credentials, `9` save battery profile (capacity + charged voltage), `10` manually sync the fuel gauge to 100%. The app appends a request ID. |
+| `000b-9c65-4d3d-bdd5-8f4c6b2e1000` | Write with response | Dashboard controls. Commands: `1` reset extrema, `2` reset session energy, `3` toggle OLED, `4` save calibration, `5` restore default calibration, `6` save alarms, `7` save Wi-Fi station credentials, `8` clear Wi-Fi station credentials, `9` save battery profile (capacity + charged voltage), `10` manually sync the fuel gauge to 100%, `11` reset battery history (deepest discharge, cycle count, average depth) without affecting the current charge level. The app appends a request ID. |
 | `000f-9c65-4d3d-bdd5-8f4c6b2e1000` | Read, Notify | Control result: version, command, request ID and applied/rejected/failed result. |
 
 The app subscribes to both the live telemetry and dashboard characteristics.
@@ -80,8 +80,9 @@ Dashboard pages rotate once per one-second BLE update, so a newly connected app
 may take up to eight seconds to populate all secondary information. Commands
 are applied by the firmware main loop and confirmed by the matching Control
 Result notification; commands `7` and `8` also show up on the next Wi-Fi
-station dashboard page, and commands `9` and `10` on the next state-of-charge
-page.
+station dashboard page, and commands `9`, `10` and `11` on the next
+state-of-charge page. A full-charge sync (command `10`) from an already-known
+baseline also records one cycle in the history stats.
 
 Command `7`'s payload (`u8` SSID length, SSID bytes, `u8` password length,
 password bytes) can reach 99 bytes before the appended request ID, well past

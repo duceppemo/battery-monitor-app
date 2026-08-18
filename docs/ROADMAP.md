@@ -39,6 +39,9 @@
   and charged-voltage settings, manual full-charge sync) reading the
   monitor's persisted, coulomb-counted state — distinct from the app-local,
   per-test rated-capacity progress estimate above.
+- [x] Show and let the app reset the monitor's deepest-discharge,
+  full-charge-cycle-count and average-discharge-depth history alongside the
+  fuel gauge (firmware 0.5.4+).
 - [ ] Test scanning, reconnecting and live notifications on an iPhone.
 - [ ] Validate current, energy and alarm behavior after commissioning the
   final Kelvin shunt at known loads.

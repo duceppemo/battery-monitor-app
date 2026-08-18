@@ -19,7 +19,7 @@ download and install.
 
 ## Current milestone
 
-The current app version is `0.3.6+15`. It provides a focused, foreground BLE
+The current app version is `0.3.7+16`. It provides a focused, foreground BLE
 companion for one monitor at a time:
 
 1. Service-filtered scan, connection lifecycle and an active disconnect action.
@@ -42,7 +42,9 @@ companion for one monitor at a time:
 9. Battery fuel gauge on firmware 0.5.3+ (`soc1`): coulomb-counted state of
    charge and time-to-empty, persisted on the monitor across reboots (unlike
    the session Ah/Wh counters above), with battery-capacity/charged-voltage
-   settings and a manual full-charge sync.
+   settings and a manual full-charge sync, plus deepest-discharge,
+   full-charge-cycle-count and average-discharge-depth history (firmware
+   0.5.4+) that resets independently of the current charge level.
 
 The firmware/app compatibility contract is
 [docs/BLE_PROTOCOL.md](docs/BLE_PROTOCOL.md). Treat a protocol change as a
