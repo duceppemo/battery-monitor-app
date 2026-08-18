@@ -86,6 +86,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
   String _appUpdateStatus = 'Check for a newer Battery Monitor app release.';
   GithubRelease? _firmwareRelease;
   Uint8List? _downloadedFirmware;
+  Uint8List? _downloadedFirmwareSignature;
   String? _downloadedFirmwareVersion;
   bool _firmwareTransferInProgress = false;
   double _firmwareTransferProgress = 0;
@@ -139,6 +140,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
 
   void _clearDownloadedFirmware({String? status}) {
     _downloadedFirmware = null;
+    _downloadedFirmwareSignature = null;
     _downloadedFirmwareVersion = null;
     if (status != null) _firmwareTransferStatus = status;
   }
@@ -315,6 +317,11 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
       if (release == null || asset == null) {
         throw StateError('No installable firmware .bin is published yet.');
       }
+      final signatureAsset = release.firmwareSignatureAsset;
+      if (signatureAsset == null) {
+        throw StateError(
+            'Firmware release v${release.version} has no signature (.sig) asset; BLE install requires firmware 0.5.16+ releases. Use the Web Dashboard to install this one.');
+      }
       final installed = _connectedFirmwareVersion;
       if (installed != null &&
           !GithubReleaseChecker.isNewer(release.version, installed)) {
@@ -325,9 +332,15 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
         return;
       }
       final firmware = await _releaseChecker.download(asset);
+      final signature = await _releaseChecker.download(signatureAsset);
+      if (signature.length != 64) {
+        throw StateError(
+            'Downloaded signature asset has an unexpected size (${signature.length} bytes).');
+      }
       if (!mounted) return;
       setState(() {
         _downloadedFirmware = firmware;
+        _downloadedFirmwareSignature = signature;
         _downloadedFirmwareVersion = release.version;
         _firmwareTransferStatus =
             'v${release.version} downloaded (${(firmware.length / 1024).toStringAsFixed(0)} KiB). Ready to install over BLE.';
@@ -343,10 +356,16 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
   Future<void> _installFirmware() async {
     final deviceId = _selectedDeviceId;
     final firmware = _downloadedFirmware;
+    final signature = _downloadedFirmwareSignature;
     if (deviceId == null || firmware == null || !_canControl) return;
     if (!_supportsBleOta) {
       _showMessage(
           'This monitor firmware does not yet support BLE OTA. Use the Web Dashboard once to install an OTA-capable version.');
+      return;
+    }
+    if (signature == null) {
+      _showMessage(
+          'The downloaded firmware has no signature. Download it again.');
       return;
     }
     if (!_downloadedFirmwareCanInstall) {
@@ -384,6 +403,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
       await widget.ble.installFirmware(
         deviceId,
         firmware,
+        signature,
         onProgress: (progress) {
           if (mounted) {
             setState(() {

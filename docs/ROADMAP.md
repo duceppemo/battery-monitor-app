@@ -62,6 +62,12 @@
 - [x] Add a stable firmware-provided monitor serial-number characteristic:
   firmware 0.5.15+ includes a per-chip `ID` in Device Information; the app
   compares it against the last-connected monitor and warns on a mismatch.
-- [ ] Design authenticated firmware OTA as a separate firmware/app feature.
+- [x] Add authenticated firmware OTA (firmware 0.5.16+): the app downloads
+  the release's `.sig` asset alongside the `.bin` and sends the 64-byte
+  ECDSA-P256 signature in the BLE transfer start frame; the monitor verifies
+  it before marking the image bootable. BLE-only by design -- the Web
+  Dashboard upload path is unchanged. Verified end-to-end against the real
+  v0.5.16 GitHub release: downloaded, transferred over BLE, signature
+  verified, and the monitor rebooted into the new firmware.
 - [ ] Consider optional on-device or cloud persistence only after the data
   lifetime, privacy and battery impact are defined.

@@ -57,9 +57,12 @@ abstract interface class BatteryMonitorBleClient {
 
   Future<String> deviceInfo(String deviceId);
 
+  /// [signature] is the 64-byte raw ECDSA-P256 r||s signature over
+  /// [firmware]'s SHA-256 digest, from the release's `.sig` asset.
   Future<void> installFirmware(
     String deviceId,
-    Uint8List firmware, {
+    Uint8List firmware,
+    Uint8List signature, {
     required void Function(double progress) onProgress,
   });
 }
@@ -291,10 +294,14 @@ class BatteryMonitorBle implements BatteryMonitorBleClient {
   @override
   Future<void> installFirmware(
     String deviceId,
-    Uint8List firmware, {
+    Uint8List firmware,
+    Uint8List signature, {
     required void Function(double progress) onProgress,
   }) async {
     if (firmware.isEmpty) throw ArgumentError.value(firmware, 'firmware');
+    if (signature.length != 64) {
+      throw ArgumentError.value(signature, 'signature', 'must be 64 bytes');
+    }
 
     final transfer = QualifiedCharacteristic(
       serviceId: BleIds.service,
@@ -336,13 +343,15 @@ class BatteryMonitorBle implements BatteryMonitorBleClient {
       // bytes for its command/offset. The 15-byte lower bound is the
       // universally available 23-byte-MTU fallback.
       final chunkSize = (mtu - 8).clamp(15, 180);
-      final start = ByteData(9)
+      final start = Uint8List(1 + 4 + 4 + 64);
+      ByteData.sublistView(start)
         ..setUint8(0, 0xA0)
         ..setUint32(1, firmware.length, Endian.little)
         ..setUint32(5, _crc32(firmware), Endian.little);
+      start.setRange(9, start.length, signature);
       await _client.writeCharacteristicWithResponse(
         transfer,
-        value: start.buffer.asUint8List(),
+        value: start,
       );
       await Future.any<void>([
         receiving.future.timeout(const Duration(seconds: 5)),

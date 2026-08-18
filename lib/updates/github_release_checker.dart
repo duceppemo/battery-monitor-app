@@ -33,6 +33,17 @@ class GithubRelease {
     }
     return null;
   }
+
+  /// The detached ECDSA-P256 signature over [firmwareAsset], required for
+  /// BLE OTA (firmware 0.5.16+). Releases published before signed OTA don't
+  /// carry this asset; the Web Dashboard upload path remains available for
+  /// those.
+  GithubReleaseAsset? get firmwareSignatureAsset {
+    for (final asset in assets) {
+      if (asset.name.toLowerCase().endsWith('.sig')) return asset;
+    }
+    return null;
+  }
 }
 
 class GithubReleaseChecker {

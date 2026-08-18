@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-enum FirmwareUpdateState { idle, receiving, verified, error }
+enum FirmwareUpdateState { idle, receiving, verified, error, verifying }
 
 class FirmwareUpdateStatus {
   const FirmwareUpdateStatus({
@@ -25,6 +25,7 @@ class FirmwareUpdateStatus {
       0 => FirmwareUpdateState.idle,
       1 => FirmwareUpdateState.receiving,
       2 => FirmwareUpdateState.verified,
+      4 => FirmwareUpdateState.verifying,
       _ => FirmwareUpdateState.error,
     };
     return FirmwareUpdateStatus(
@@ -41,6 +42,7 @@ class FirmwareUpdateStatus {
         3 => 'flash write failed',
         4 => 'image checksum did not match',
         5 => 'firmware image verification failed',
+        6 => 'firmware signature verification failed',
         _ => 'unknown update error',
       };
 }

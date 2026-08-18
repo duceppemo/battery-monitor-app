@@ -96,6 +96,7 @@ class _FakeBatteryMonitorBle implements BatteryMonitorBleClient {
   Future<String> deviceInfo(String deviceId) async => '';
 
   @override
-  Future<void> installFirmware(String deviceId, Uint8List firmware,
+  Future<void> installFirmware(
+      String deviceId, Uint8List firmware, Uint8List signature,
       {required void Function(double progress) onProgress}) async {}
 }

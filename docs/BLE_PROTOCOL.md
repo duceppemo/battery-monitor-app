@@ -9,19 +9,33 @@ coulomb-counted battery fuel gauge (state of charge and time-to-empty);
 firmware 0.5.10+ additionally advertises `protection1` for the low-voltage/
 low-SoC load-protection relay; firmware 0.5.15+ additionally advertises
 `energyp1` for opt-in session Ah/Wh persistence and includes a stable
-per-chip `ID` in Device Information.
+per-chip `ID` in Device Information; firmware 0.5.16+ requires a signed
+image for BLE transfers (see below).
 
 ## Firmware Transfer v1
 
 - Write-with-response: `7d9f000d-9c65-4d3d-bdd5-8f4c6b2e1000`
 - Read/notify status: `7d9f000e-9c65-4d3d-bdd5-8f4c6b2e1000`
 
-The app starts with `0xA0 + u32 image size + u32 IEEE CRC-32`, sends `0xA1 +
-u32 offset + data` frames in order, and finishes with `0xA2`. `0xA3` aborts.
-The status packet is 12 bytes: protocol version, state, received/expected byte
-counts, error code and reserved byte. State `2` means the monitor verified the
-complete image and the monitor waits two seconds before rebooting. This transfer checks integrity, not the
-publisher's identity; use only a trusted GitHub Release asset.
+The app starts with `0xA0 + u32 image size + u32 IEEE CRC-32 + 64-byte
+ECDSA-P256 signature` (raw `r||s`, 32 bytes each, big-endian; not DER),
+sends `0xA1 + u32 offset + data` frames in order, and finishes with `0xA2`.
+`0xA3` aborts. The signature is over the image's SHA-256 digest and is
+required by firmware 0.5.16+; it comes from the release's `.sig` asset
+(`GithubRelease.firmwareSignatureAsset`, same GitHub Release as the `.bin`).
+Firmware verifies it against a public key embedded in firmware, off the BLE
+GATT callback (mbedTLS's ECDSA math previously overflowed the Bluetooth
+controller task's stack when run synchronously there), so there is a brief
+`verifying` status between the last data frame and the terminal result.
+
+The status packet is 12 bytes: protocol version, state, received/expected
+byte counts, error code and reserved byte. State `2` means the monitor
+verified the complete image and waits two seconds before rebooting; state
+`4` (firmware 0.5.16+) means verification is in progress. Error code `6`
+means the signature was invalid — the write is discarded via `Update.abort()`
+so the previous firmware stays the boot target. CRC-32 alone checks transfer
+integrity, not the publisher's identity; the signature is what makes BLE OTA
+authenticated. Only ever install a trusted GitHub Release asset.
 
 The monitor is a BLE GATT peripheral named `BatteryMonitor`. It exposes the
 custom service:

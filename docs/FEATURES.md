@@ -177,6 +177,13 @@ image in memory, so it can then transfer it over BLE without joining the
 monitor Wi-Fi AP. Firmware 0.5.1+ accepts **Install via BLE** and the app waits
 for its CRC-32/image-verification status before restart.
 
+Firmware 0.5.16+ additionally requires a signature: the app also downloads the
+release's `.sig` asset and sends it as part of the BLE start frame, so the
+monitor can verify the image against its embedded public key before marking it
+bootable. Releases published before signed OTA don't have a `.sig` asset;
+**Download** reports this and the Web Dashboard remains the way to install
+them.
+
 Both repositories and release assets are public by design: a consumer app must
 discover and download updates without an embedded GitHub credential. Never add
 a personal access token to the app.
@@ -187,6 +194,6 @@ status available briefly before the monitor restarts, after which the app
 reconnects and reads the installed version.
 
 The Web Dashboard can still upload the same local `.bin` file, and remains the
-bootstrap/recovery route for monitor firmware that predates BLE OTA. CRC-32
-detects corruption but does not authenticate an image; download assets only
-from this project's GitHub Releases.
+bootstrap/recovery route for monitor firmware that predates BLE OTA, and for
+releases without a `.sig` asset. It stays CRC/format-checked only, without a
+signature check; download assets only from this project's GitHub Releases.
