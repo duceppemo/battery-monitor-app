@@ -55,6 +55,10 @@ abstract interface class BatteryMonitorBleClient {
 
   Future<void> saveEnergyPersistence(String deviceId, {required bool enabled});
 
+  /// [name] empty clears a custom name, reverting the monitor to its
+  /// default (auto-generated from its chip ID).
+  Future<void> saveDeviceName(String deviceId, String name);
+
   Future<String> deviceInfo(String deviceId);
 
   /// [signature] is the 64-byte raw ECDSA-P256 r||s signature over
@@ -279,6 +283,15 @@ class BatteryMonitorBle implements BatteryMonitorBleClient {
   @override
   Future<void> saveEnergyPersistence(String deviceId, {required bool enabled}) =>
       sendControl(deviceId, [16, enabled ? 1 : 0]);
+
+  @override
+  Future<void> saveDeviceName(String deviceId, String name) async {
+    final nameBytes = utf8.encode(name);
+    if (nameBytes.length > 32) {
+      throw ArgumentError.value(name, 'name', 'Must be at most 32 UTF-8 bytes.');
+    }
+    await sendControl(deviceId, [17, nameBytes.length, ...nameBytes]);
+  }
 
   @override
   Future<String> deviceInfo(String deviceId) async {

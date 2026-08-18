@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-The current app version is `0.3.14+23`. It provides a focused, foreground BLE
+The current app version is `0.3.15+24`. It provides a focused, foreground BLE
 companion for one monitor at a time:
 
 1. Service-filtered scan, connection lifecycle and an active disconnect action.
@@ -60,7 +60,17 @@ companion for one monitor at a time:
     monitor, not simultaneous multi-monitor dashboards. If a saved
     address is stale (a new random BLE address, or the unit out of range),
     the connection attempt fails like any other and a normal scan finds it
-    again.
+    again. A live scan result already saved is hidden from the plain scan
+    list instead of showing twice, and any not-yet-saved result shows a
+    distinguishing default name (a fragment of its BLE address) instead of
+    the generic name every monitor advertises.
+15. A device-side name on firmware 0.5.18+ (`name1`), shared with the Web
+    Dashboard rather than a phone-only label: connecting reads the
+    monitor's actual name from Device Information and syncs it into the
+    saved-monitor entry, and renaming while connected pushes the change to
+    the monitor (control command `17`) so the Web Dashboard picks it up
+    too, instead of only relabeling it on this phone. Older firmware
+    without `name1` keeps the previous purely local, phone-only naming.
 
 The firmware/app compatibility contract is
 [BLE_PROTOCOL.md](BLE_PROTOCOL.md). Treat a protocol change as a

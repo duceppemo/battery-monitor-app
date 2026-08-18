@@ -80,3 +80,20 @@
   Verified end-to-end on a physical device: connect, saved entry appears,
   rename persists, reconnect via the saved entry succeeds, disconnect is
   clean.
+- [x] Stop showing an already-saved monitor a second time as a generic
+  "BatteryMonitor" in the plain scan list, and give a not-yet-saved scan
+  result a distinguishing default name (a BLE-address fragment) instead of
+  the name every monitor advertises identically -- the same fragment a
+  freshly-saved entry's default name uses, so it doesn't change the moment
+  you connect.
+- [x] Add a device-side name on firmware 0.5.18+ (`name1`), shared with the
+  Web Dashboard instead of a phone-only label: connecting syncs the saved
+  monitor's name from the device's actual name, and renaming while
+  connected pushes the change over BLE (control command `17`) rather than
+  only relabeling it locally. Falls back to the previous purely-local
+  naming against older firmware. Verified end-to-end: renamed via the Web
+  Dashboard and confirmed over BLE, renamed via the app while connected and
+  confirmed on the Web Dashboard, both directions updating immediately
+  (firmware fix: Device Information's `NAME=` field was only rebuilt on
+  the normal one-second publish cycle, so a client re-reading it right
+  after an acknowledged rename could still catch a stale value).

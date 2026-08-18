@@ -10,7 +10,10 @@ firmware 0.5.10+ additionally advertises `protection1` for the low-voltage/
 low-SoC load-protection relay; firmware 0.5.15+ additionally advertises
 `energyp1` for opt-in session Ah/Wh persistence and includes a stable
 per-chip `ID` in Device Information; firmware 0.5.16+ requires a signed
-image for BLE transfers (see below).
+image for BLE transfers (see below); firmware 0.5.18+ additionally
+advertises `name1` and includes a `NAME=` field in Device Information for a
+device-side name, settable from the app (control command `17`) or the Web
+Dashboard -- see "Device name" below.
 
 ## Firmware Transfer v1
 
@@ -90,7 +93,7 @@ uses fixed 20-byte little-endian pages so the initial ATT MTU is sufficient:
 | UUID suffix | Access | Purpose |
 | --- | --- | --- |
 | `000a-9c65-4d3d-bdd5-8f4c6b2e1000` | Read, Notify | Rotating dashboard pages: extrema (`0x11`), directional energy (`0x12`), state (`0x13`), calibration (`0x14`), shunt/config (`0x15`), alarms (`0x16`), Wi-Fi station status (`0x17`), state of charge (`0x18`) and load protection (`0x19`). See the firmware repository's `docs/BLE_PROTOCOL.md` for the byte layout. |
-| `000b-9c65-4d3d-bdd5-8f4c6b2e1000` | Write with response | Dashboard controls. Commands: `1` reset extrema, `2` reset session energy, `3` toggle OLED, `4` save calibration, `5` restore default calibration, `6` save alarms, `7` save Wi-Fi station credentials, `8` clear Wi-Fi station credentials, `9` save battery profile (capacity + charged voltage), `10` manually sync the fuel gauge to 100%, `11` reset battery history (deepest discharge, cycle count, average depth) without affecting the current charge level, `12` save load-protection settings (enabled flag + low-voltage + low-SoC thresholds), `13` reconnect the load after a trip (rejected while the trigger condition is still active), `14` bench-test force-connect the relay, `15` bench-test force-disconnect the relay — `14`/`15` bypass the enabled flag and every threshold, `16` save whether session Ah/Wh totals persist across reboots (off by default; enabling starts persisting the totals already running, it does not restore an old saved value). The app appends a request ID. |
+| `000b-9c65-4d3d-bdd5-8f4c6b2e1000` | Write with response | Dashboard controls. Commands: `1` reset extrema, `2` reset session energy, `3` toggle OLED, `4` save calibration, `5` restore default calibration, `6` save alarms, `7` save Wi-Fi station credentials, `8` clear Wi-Fi station credentials, `9` save battery profile (capacity + charged voltage), `10` manually sync the fuel gauge to 100%, `11` reset battery history (deepest discharge, cycle count, average depth) without affecting the current charge level, `12` save load-protection settings (enabled flag + low-voltage + low-SoC thresholds), `13` reconnect the load after a trip (rejected while the trigger condition is still active), `14` bench-test force-connect the relay, `15` bench-test force-disconnect the relay — `14`/`15` bypass the enabled flag and every threshold, `16` save whether session Ah/Wh totals persist across reboots (off by default; enabling starts persisting the totals already running, it does not restore an old saved value), `17` save a device-side name shared with the Web Dashboard (`u8` length 0-32 + name bytes; empty clears a custom name back to the ID-derived default). The app appends a request ID. |
 | `000f-9c65-4d3d-bdd5-8f4c6b2e1000` | Read, Notify | Control result: version, command, request ID and applied/rejected/failed result. |
 
 The app subscribes to both the live telemetry and dashboard characteristics.
@@ -132,3 +135,23 @@ peripheral. Use `ID`, not `DiscoveredDevice.id`/`CBPeripheral.identifier`, to
 recognize "the same monitor" across reconnects — iOS in particular exposes a
 privacy-scoped peripheral identifier that can change over time even for the
 same physical device.
+
+### Device name (firmware 0.5.18+, `name1`)
+
+The monitor's name is device-side and shared with the Web Dashboard, not a
+purely local app label: Device Information's `NAME=` field (present only
+when `name1` is advertised) is either a user-assigned name or, if never
+customized, `Battery Monitor <last 4 hex of ID>` — the same fragment used
+for a not-yet-connected scan result's default label. Control command `17`
+(`u8` name length 0-32, name bytes) sets it; an empty name clears a custom
+name back to that default. Renaming while connected re-reads Device
+Information afterward rather than trusting the write alone, since the
+firmware refreshes `NAME=` immediately on a successful save (not waiting for
+the next telemetry-cadence rebuild) specifically so this read doesn't race a
+stale value.
+
+Firmware predating `name1` has no `NAME=` key at all; the app then falls
+back to `SavedMonitorStore`'s purely local, phone-only label (a fragment of
+the BLE address, renamable, but never pushed to the device or visible on
+the Web Dashboard) — unchanged from how saved-monitor naming worked before
+`name1` existed.

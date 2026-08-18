@@ -110,6 +110,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
       _deviceInfo?.contains('protection1') ?? false;
   bool get _supportsEnergyPersistence =>
       _deviceInfo?.contains('energyp1') ?? false;
+  bool get _supportsDeviceName => _deviceInfo?.contains('name1') ?? false;
   String get _temperatureUnitLabel => _temperatureFahrenheit ? 'deg F' : 'deg C';
   double? _displayTemperature(double? celsius) => celsius == null
       ? null
@@ -123,6 +124,8 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
       RegExp(r'FW=([^;]+)').firstMatch(_deviceInfo ?? '')?.group(1);
   String? get _monitorStableId =>
       RegExp(r'ID=([^;]+)').firstMatch(_deviceInfo ?? '')?.group(1);
+  String? get _monitorDeviceName =>
+      RegExp(r'NAME=([^;]+)').firstMatch(_deviceInfo ?? '')?.group(1);
   bool get _firmwareUpdateAvailable {
     final release = _firmwareRelease;
     final installed = _connectedFirmwareVersion;
@@ -613,7 +616,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
         content: TextField(
           controller: controller,
           autofocus: true,
-          maxLength: 40,
+          maxLength: 32,
           decoration: const InputDecoration(labelText: 'Name'),
         ),
         actions: [
@@ -630,6 +633,28 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
     );
     controller.dispose();
     if (name == null || name.isEmpty || !mounted) return;
+
+    // Firmware 0.5.18+ (name1) owns the name; push the rename there so it
+    // also shows on the Web Dashboard, rather than only labeling it on this
+    // phone. Only possible while connected to this exact monitor.
+    final canSyncToDevice = _supportsDeviceName &&
+        _isConnected &&
+        monitor.lastDeviceAddress == _selectedDeviceId;
+    if (canSyncToDevice) {
+      try {
+        await widget.ble.saveDeviceName(monitor.lastDeviceAddress, name);
+        // Re-reads Device Information and, via _checkMonitorIdentity,
+        // syncs the saved-monitor entry to the name the device now reports
+        // -- the same path a normal reconnect already goes through.
+        await _readDeviceInfo(monitor.lastDeviceAddress);
+        return;
+      } on Object catch (error) {
+        if (mounted) {
+          _showMessage(
+              'Renaming the monitor itself failed ($error); saved the name on this phone only.');
+        }
+      }
+    }
     final monitors = await _savedMonitorStore.rename(monitor.id, name);
     if (mounted) setState(() => _savedMonitors = monitors);
   }
@@ -700,12 +725,26 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
 
     final deviceId = _selectedDeviceId;
     if (deviceId != null) {
-      final monitors = await _savedMonitorStore.recordConnection(
+      // Firmware 0.5.18+ (name1) owns the name -- the device is reachable
+      // from any transport (Web Dashboard included), so its reported name
+      // is authoritative and overwrites whatever this phone had saved
+      // locally. Older firmware without name1 keeps the previous
+      // purely-local behavior: a fragment of the BLE address (the stable
+      // chip ID isn't known until this GATT read completes, but the
+      // address is, so it matches what the scan list already showed) as a
+      // default that the user can rename locally.
+      final reportedName = _supportsDeviceName ? _monitorDeviceName : null;
+      var monitors = await _savedMonitorStore.recordConnection(
         id: id,
-        defaultName:
-            'Battery Monitor ${id.length >= 4 ? id.substring(id.length - 4) : id}',
+        defaultName: reportedName ?? 'Battery Monitor ${_addressSuffix(deviceId)}',
         deviceAddress: deviceId,
       );
+      if (reportedName != null) {
+        final existingIndex = monitors.indexWhere((m) => m.id == id);
+        if (existingIndex >= 0 && monitors[existingIndex].name != reportedName) {
+          monitors = await _savedMonitorStore.rename(id, reportedName);
+        }
+      }
       if (mounted) setState(() => _savedMonitors = monitors);
     }
   }
@@ -1633,10 +1672,26 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
             ),
             ..._savedMonitors.map((monitor) => _savedMonitorCard(context, monitor)),
           ],
-          ..._devices.values.map((device) => _deviceCard(context, device)),
+          ..._devices.values
+              .where((device) => !_savedMonitors
+                  .any((monitor) => monitor.lastDeviceAddress == device.id))
+              .map((device) => _deviceCard(context, device)),
         ],
       ),
     );
+  }
+
+  /// A short, stable fragment of a BLE address/UUID to tell otherwise
+  /// identically-named monitors apart before connecting (the firmware
+  /// advertises the same fixed name for every unit). This is the same
+  /// fragment `_checkMonitorIdentity` uses as a saved monitor's default
+  /// name, so a device's displayed name doesn't change the moment you
+  /// connect to it.
+  static String _addressSuffix(String address) {
+    final alphanumeric = address.replaceAll(RegExp(r'[^A-Za-z0-9]'), '');
+    return alphanumeric.length >= 4
+        ? alphanumeric.substring(alphanumeric.length - 4).toUpperCase()
+        : alphanumeric.toUpperCase();
   }
 
   Widget _savedMonitorCard(BuildContext context, SavedMonitor monitor) {
@@ -1711,7 +1766,9 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
               ? Theme.of(context).colorScheme.primary
               : null,
         ),
-        title: Text(device.name.isEmpty ? 'Battery Monitor' : device.name),
+        title: Text(device.name.isEmpty || device.name == 'BatteryMonitor'
+            ? 'Battery Monitor ${_addressSuffix(device.id)}'
+            : device.name),
         subtitle: Text('RSSI ${device.rssi} dBm'),
         trailing: isDisconnect
             ? OutlinedButton(
