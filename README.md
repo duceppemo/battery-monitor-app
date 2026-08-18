@@ -139,6 +139,29 @@ controlled discharge test.
 Platform permission and signing guidance is in
 [docs/PLATFORM_SETUP.md](docs/PLATFORM_SETUP.md).
 
+## Load protection relay
+
+On firmware 0.5.10+ (`protection1`), the app has a load-protection card that
+mirrors the Web Dashboard's exactly — either transport can configure or test
+it, and both act on the same monitor state:
+
+- **Disabled by default**, and a complete no-op until explicitly enabled: an
+  unreviewed default threshold can never disconnect a load nobody asked to
+  protect.
+- Once enabled, the monitor opens its relay/SSR output the moment voltage or
+  state of charge drops below the configured threshold, whichever happens
+  first — SoC is only checked once the fuel gauge has been synced at least
+  once. The trip **latches**: it never reconnects on its own, so a reading
+  hovering at the threshold under load can't chatter the relay.
+- **Reconnect load** clears the latch, but is rejected while the trigger
+  condition is still active.
+- **Test: force connect** / **Test: force disconnect** bypass the enabled
+  flag and every threshold entirely, for bench-testing the relay/SSR wiring
+  itself before trusting the automatic logic.
+
+Verified end-to-end against real SSR hardware (an InkBird SSR-25 DA) through
+this app.
+
 ## Firmware updates
 
 The **Connection & app update** card checks only for a newer Android/iOS app

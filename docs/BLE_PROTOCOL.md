@@ -79,7 +79,7 @@ uses fixed 20-byte little-endian pages so the initial ATT MTU is sufficient:
 
 The app subscribes to both the live telemetry and dashboard characteristics.
 Dashboard pages rotate once per one-second BLE update, so a newly connected app
-may take up to eight seconds to populate all secondary information. Commands
+may take up to nine seconds to populate all secondary information. Commands
 are applied by the firmware main loop and confirmed by the matching Control
 Result notification; commands `7` and `8` also show up on the next Wi-Fi
 station dashboard page, commands `9`, `10` and `11` on the next
