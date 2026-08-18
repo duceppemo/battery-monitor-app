@@ -9,6 +9,7 @@ import 'package:battery_monitor_app/ble/battery_monitor_ble.dart';
 import 'package:battery_monitor_app/ble/ble_permission_gate.dart';
 import 'package:battery_monitor_app/models/binary_telemetry_v1.dart';
 import 'package:battery_monitor_app/models/dashboard_packet_v1.dart';
+import 'package:battery_monitor_app/models/saved_monitor.dart';
 import 'package:battery_monitor_app/models/session_log.dart';
 import 'package:battery_monitor_app/models/telemetry_presentation_filter.dart';
 import 'package:battery_monitor_app/screens/capacity_report_screen.dart';
@@ -62,6 +63,8 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
   bool _temperatureFahrenheit = false;
   static const _temperatureUnitPrefKey = 'temperature_unit_fahrenheit';
   static const _lastMonitorIdPrefKey = 'last_monitor_stable_id';
+  final SavedMonitorStore _savedMonitorStore = SavedMonitorStore();
+  List<SavedMonitor> _savedMonitors = const [];
   final _protectionLowVoltageController = TextEditingController();
   final _protectionLowSocController = TextEditingController();
 
@@ -150,6 +153,12 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
     super.initState();
     _loadAlarms();
     _loadTemperatureUnit();
+    _loadSavedMonitors();
+  }
+
+  Future<void> _loadSavedMonitors() async {
+    final monitors = await _savedMonitorStore.load();
+    if (mounted) setState(() => _savedMonitors = monitors);
   }
 
   Future<void> _loadTemperatureUnit() async {
@@ -508,7 +517,18 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
   static double _max(double? old, double value) =>
       old == null ? value : math.max(old, value);
 
-  Future<void> _connect(DiscoveredDevice device) async {
+  Future<void> _connect(DiscoveredDevice device) =>
+      _connectTo(device.id, device.name);
+
+  Future<void> _connectSaved(SavedMonitor monitor) =>
+      _connectTo(monitor.lastDeviceAddress, monitor.name);
+
+  /// [deviceId] is the OS-assigned BLE peripheral address -- either just
+  /// found by a live scan, or a saved monitor's last-known address. The
+  /// latter can be stale (a new random address, or the unit simply out of
+  /// range); on failure the user falls back to a normal scan, same as any
+  /// other connection failure.
+  Future<void> _connectTo(String deviceId, String displayName) async {
     await _connectionSubscription?.cancel();
     await _telemetrySubscription?.cancel();
     await _dashboardSubscription?.cancel();
@@ -521,7 +541,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
         status:
             'Disconnected. Download firmware again after connecting to a monitor.',
       );
-      _selectedDeviceId = device.id;
+      _selectedDeviceId = deviceId;
       _connectionState = DeviceConnectionState.connecting;
       _telemetry = null;
       _presentedTelemetry = null;
@@ -534,9 +554,9 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
       _batteryProfileFieldsInitialized = false;
       _protectionFieldsInitialized = false;
       _status =
-          'Connecting to ${device.name.isEmpty ? device.id : device.name}...';
+          'Connecting to ${displayName.isEmpty ? deviceId : displayName}...';
     });
-    _connectionSubscription = widget.ble.connect(device.id).listen(
+    _connectionSubscription = widget.ble.connect(deviceId).listen(
       (update) {
         if (!mounted) return;
         setState(() {
@@ -552,7 +572,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
               DeviceConnectionState.connected) {
             _sessionLog.recordEvent(
               'Monitor connected',
-              detail: device.name.isEmpty ? device.id : device.name,
+              detail: displayName.isEmpty ? deviceId : displayName,
             );
           }
           _status = switch (update.connectionState) {
@@ -564,8 +584,8 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
           };
         });
         if (update.connectionState == DeviceConnectionState.connected) {
-          _subscribe(device.id);
-          _readDeviceInfo(device.id);
+          _subscribe(deviceId);
+          _readDeviceInfo(deviceId);
         }
       },
       onError: (Object error) {
@@ -582,6 +602,41 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
         }
       },
     );
+  }
+
+  Future<void> _renameSavedMonitor(SavedMonitor monitor) async {
+    final controller = TextEditingController(text: monitor.name);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Rename monitor'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 40,
+          decoration: const InputDecoration(labelText: 'Name'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (name == null || name.isEmpty || !mounted) return;
+    final monitors = await _savedMonitorStore.rename(monitor.id, name);
+    if (mounted) setState(() => _savedMonitors = monitors);
+  }
+
+  Future<void> _forgetSavedMonitor(SavedMonitor monitor) async {
+    final monitors = await _savedMonitorStore.remove(monitor.id);
+    if (mounted) setState(() => _savedMonitors = monitors);
   }
 
   Future<void> _disconnect() async {
@@ -642,6 +697,17 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
           'Connected to a different monitor than last time (ID $id, was $previousId).');
     }
     await preferences.setString(_lastMonitorIdPrefKey, id);
+
+    final deviceId = _selectedDeviceId;
+    if (deviceId != null) {
+      final monitors = await _savedMonitorStore.recordConnection(
+        id: id,
+        defaultName:
+            'Battery Monitor ${id.length >= 4 ? id.substring(id.length - 4) : id}',
+        deviceAddress: deviceId,
+      );
+      if (mounted) setState(() => _savedMonitors = monitors);
+    }
   }
 
   Future<void> _loadAlarms() async {
@@ -1559,10 +1625,74 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
             child: Text(_appUpdateStatus,
                 style: Theme.of(context).textTheme.bodySmall),
           ),
+          if (_savedMonitors.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.only(top: 10, bottom: 4),
+              child: Text('Saved monitors',
+                  style: Theme.of(context).textTheme.labelLarge),
+            ),
+            ..._savedMonitors.map((monitor) => _savedMonitorCard(context, monitor)),
+          ],
           ..._devices.values.map((device) => _deviceCard(context, device)),
         ],
       ),
     );
+  }
+
+  Widget _savedMonitorCard(BuildContext context, SavedMonitor monitor) {
+    final isSelected = monitor.lastDeviceAddress == _selectedDeviceId;
+    final isDisconnect = isSelected && _isConnected;
+    final label = isDisconnect
+        ? 'Disconnect'
+        : isSelected && _isConnecting
+            ? 'Connecting...'
+            : 'Connect';
+    return Card(
+      child: ListTile(
+        leading: Icon(
+          Icons.battery_charging_full,
+          color: isSelected && _isConnected
+              ? Theme.of(context).colorScheme.primary
+              : null,
+        ),
+        title: Text(monitor.name),
+        subtitle: Text('Last connected ${_relativeTime(monitor.lastConnectedAt)}'),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            isDisconnect
+                ? OutlinedButton(
+                    onPressed: _disconnect,
+                    child: const Text('Disconnect'),
+                  )
+                : FilledButton(
+                    onPressed: isSelected && _isConnecting
+                        ? null
+                        : () => _connectSaved(monitor),
+                    child: Text(label),
+                  ),
+            PopupMenuButton<String>(
+              onSelected: (action) {
+                if (action == 'rename') _renameSavedMonitor(monitor);
+                if (action == 'forget') _forgetSavedMonitor(monitor);
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem(value: 'rename', child: Text('Rename')),
+                PopupMenuItem(value: 'forget', child: Text('Forget')),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _relativeTime(DateTime time) {
+    final difference = DateTime.now().difference(time);
+    if (difference.inMinutes < 1) return 'just now';
+    if (difference.inHours < 1) return '${difference.inMinutes}m ago';
+    if (difference.inDays < 1) return '${difference.inHours}h ago';
+    return '${difference.inDays}d ago';
   }
 
   Widget _deviceCard(BuildContext context, DiscoveredDevice device) {

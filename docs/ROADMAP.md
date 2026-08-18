@@ -71,3 +71,12 @@
   verified, and the monitor rebooted into the new firmware.
 - [ ] Consider optional on-device or cloud persistence only after the data
   lifetime, privacy and battery impact are defined.
+- [x] Add a remembered list of saved monitors (`SavedMonitorStore`), keyed
+  by the stable per-chip `ID` from Device Information: each connection is
+  recorded with a default (renamable) name and last-known BLE address, up
+  to 10 entries, most-recent first. Still one connection at a time by
+  design, not simultaneous multi-monitor dashboards -- a quick way to
+  switch between a house bank, a starter battery or a friend's boat.
+  Verified end-to-end on a physical device: connect, saved entry appears,
+  rename persists, reconnect via the saved entry succeeds, disconnect is
+  clean.

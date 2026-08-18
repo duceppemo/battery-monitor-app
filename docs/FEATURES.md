@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-The current app version is `0.3.12+21`. It provides a focused, foreground BLE
+The current app version is `0.3.14+23`. It provides a focused, foreground BLE
 companion for one monitor at a time:
 
 1. Service-filtered scan, connection lifecycle and an active disconnect action.
@@ -50,6 +50,17 @@ companion for one monitor at a time:
     instead of resetting every power cycle. Off by default; enabling it
     starts persisting the totals already accumulating, it does not restore
     an old saved value over live progress.
+14. A remembered list of saved monitors (up to 10, most-recent first),
+    keyed by the same stable per-chip `ID` used for the mismatch warning
+    above: each successful connection is recorded with a default name
+    (editable) and its last-known BLE address, shown above live scan
+    results with its own Connect button, a rename dialog and a "Forget"
+    action. Still one connection at a time by design — this is a quick way
+    to switch between a house bank, a starter battery or a friend's boat
+    monitor, not simultaneous multi-monitor dashboards. If a saved
+    address is stale (a new random BLE address, or the unit out of range),
+    the connection attempt fails like any other and a normal scan finds it
+    again.
 
 The firmware/app compatibility contract is
 [BLE_PROTOCOL.md](BLE_PROTOCOL.md). Treat a protocol change as a
