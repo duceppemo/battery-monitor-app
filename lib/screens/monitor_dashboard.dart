@@ -1415,21 +1415,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Battery Monitor'),
-        actions: [
-          TextButton(
-            onPressed: _toggleTemperatureUnit,
-            child: Text(
-              _temperatureFahrenheit ? 'Show °C' : 'Show °F',
-              style: TextStyle(
-                color: Theme.of(context).appBarTheme.foregroundColor ??
-                    Theme.of(context).colorScheme.onSurface,
-              ),
-            ),
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Battery Monitor')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -1814,6 +1800,24 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
               '${_format(_displayTemperature(_telemetry?.validTemperatureCelsius), _temperatureUnitLabel)}  ${_minMax(_displayTemperature(_dashboard.temperatureMinCelsius), _displayTemperature(_dashboard.temperatureMaxCelsius), _temperatureUnitLabel)}'),
           _valueRow('Shunt voltage',
               '${_formatNanoVolts(_dashboard.lastShuntVoltageNanoVolts)}  ${_minMaxNanoVolts(_dashboard.shuntMinNanoVolts, _dashboard.shuntMaxNanoVolts)}'),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton(
+                onPressed: _toggleTemperatureUnit,
+                child: Text(_temperatureFahrenheit ? 'Show °C' : 'Show °F'),
+              ),
+              OutlinedButton.icon(
+                onPressed: _canControl
+                    ? () => _sendControl(const [3], 'Display toggle requested.')
+                    : null,
+                icon: const Icon(Icons.monitor_outlined),
+                label: Text(_dashboard.displayOn ? 'Display off' : 'Display on'),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -1991,14 +1995,6 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
           _valueRow('Uptime', _formatUptime(_dashboard.uptimeSeconds)),
           _valueRow('Firmware', 'v$_monitorFirmwareVersion'),
           _valueRow('Device', _deviceInfo ?? 'Reading device information...'),
-          const SizedBox(height: 10),
-          OutlinedButton.icon(
-            onPressed: _canControl
-                ? () => _sendControl(const [3], 'Display toggle requested.')
-                : null,
-            icon: const Icon(Icons.monitor_outlined),
-            label: Text(_dashboard.displayOn ? 'Display off' : 'Display on'),
-          ),
         ],
       ),
     );
