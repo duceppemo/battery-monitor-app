@@ -19,7 +19,7 @@ download and install.
 
 ## Current milestone
 
-The current app version is `0.3.7+16`. It provides a focused, foreground BLE
+The current app version is `0.3.8+17`. It provides a focused, foreground BLE
 companion for one monitor at a time:
 
 1. Service-filtered scan, connection lifecycle and an active disconnect action.
@@ -45,6 +45,12 @@ companion for one monitor at a time:
    settings and a manual full-charge sync, plus deepest-discharge,
    full-charge-cycle-count and average-discharge-depth history (firmware
    0.5.4+) that resets independently of the current charge level.
+10. A full capacity test report generated from a finished test session's own
+    local log: a voltage-vs-discharged-Ah curve, observed capacity against
+    the rated capacity, an optional Peukert-law adjustment to a reference
+    discharge rate, a pass/fail verdict against a configurable threshold, and
+    a shareable plain-text summary. Entirely app-local and firmware-version
+    independent — it's computed from data the session log already captures.
 
 The firmware/app compatibility contract is
 [docs/BLE_PROTOCOL.md](docs/BLE_PROTOCOL.md). Treat a protocol change as a
@@ -92,6 +98,37 @@ This is a convenient session-progress indicator, not a voltage-based state of
 charge model or a substitute for calibration. Its accuracy depends on the
 monitor's current calibration, the shunt, and keeping the test session running
 for the discharge being measured.
+
+## Capacity test report
+
+Finishing a named test session (Test session card → **Finish**) offers
+**View full report**, a dedicated screen built from that session's own local
+log — nothing is fetched from the monitor beyond what was already captured:
+
+- A voltage-vs-discharged-Ah discharge curve, decimated to a smooth chart
+  regardless of how many raw samples the session holds.
+- Observed capacity (Ah) and energy (Wh), average discharge current and rate
+  expressed in C (multiples of the rated capacity), against the session's
+  rated capacity.
+- A **PASS**/**FAIL**/**INCONCLUSIVE** verdict against a configurable
+  threshold (80% of rated capacity by default) — inconclusive only when no
+  rated capacity was set for the test.
+- An optional Peukert-law rate adjustment: enter the battery's Peukert
+  exponent and the discharge duration its rated capacity was actually
+  specified at (e.g. 20 hours for a C/20 lead-acid rating), and the report
+  normalizes the observed capacity to that reference rate before comparing it
+  against the rating. Both fields are blank by default and the adjustment is
+  skipped unless both are filled in — there is no built-in default exponent,
+  since guessing wrong for the wrong chemistry would make the verdict
+  silently untrustworthy. Treat a large adjustment as an approximate
+  extrapolation, most reliable when the test rate is reasonably close to the
+  reference rate.
+- A shareable plain-text summary via the same share sheet as CSV export.
+
+This report has been validated against synthetic session data (see
+`test/capacity_test_report_test.dart` and
+`test/capacity_report_screen_test.dart`) but not yet against a real
+controlled discharge test.
 
 Platform permission and signing guidance is in
 [docs/PLATFORM_SETUP.md](docs/PLATFORM_SETUP.md).

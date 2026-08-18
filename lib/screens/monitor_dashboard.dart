@@ -11,6 +11,7 @@ import 'package:battery_monitor_app/models/binary_telemetry_v1.dart';
 import 'package:battery_monitor_app/models/dashboard_packet_v1.dart';
 import 'package:battery_monitor_app/models/session_log.dart';
 import 'package:battery_monitor_app/models/telemetry_presentation_filter.dart';
+import 'package:battery_monitor_app/screens/capacity_report_screen.dart';
 import 'package:battery_monitor_app/updates/github_release_checker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
@@ -1194,6 +1195,19 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
               child: const Text('Close'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => CapacityReportScreen(
+                    summary: summary,
+                    entries: _sessionLog.entries,
+                    deviceInfo: _deviceInfo,
+                  ),
+                ));
+              },
+              child: const Text('View full report'),
             ),
           ],
         ),

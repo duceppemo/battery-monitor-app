@@ -1,7 +1,7 @@
 /// Human-readable identity shown in the app and included in support reports.
 /// The Git revision is injected by the build command through `--dart-define`.
 abstract final class AppBuildInfo {
-  static const version = '0.3.7+16';
+  static const version = '0.3.8+17';
   static const gitRevision = String.fromEnvironment(
     'GIT_SHA',
     defaultValue: 'local',

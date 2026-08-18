@@ -45,6 +45,11 @@
 - [ ] Test scanning, reconnecting and live notifications on an iPhone.
 - [ ] Validate current, energy and alarm behavior after commissioning the
   final Kelvin shunt at known loads.
+- [x] Add a full capacity test report (discharge curve, observed-vs-rated
+  capacity, optional Peukert rate adjustment, pass/fail verdict, shareable
+  summary) generated from a finished test session's own local log. Validated
+  against synthetic session data only so far — not yet against a real
+  controlled discharge test.
 
 ## Later
 
