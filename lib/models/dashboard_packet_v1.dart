@@ -78,6 +78,7 @@ class DashboardPacketV1 {
   double get chargedAmpHours => _data.getInt32(5, Endian.little) / 1000.0;
   double get dischargedWattHours => _data.getInt32(9, Endian.little) / 1000.0;
   double get chargedWattHours => _data.getInt32(13, Endian.little) / 1000.0;
+  bool get energyPersistEnabled => _packet[17] != 0;
 
   int get stateFlags => _packet[1];
   int get sequence => _data.getUint16(2, Endian.little);
@@ -156,6 +157,7 @@ class DashboardSnapshot {
   double? chargedAmpHours;
   double? dischargedWattHours;
   double? chargedWattHours;
+  bool energyPersistEnabled = false;
   bool sensorOk = false;
   bool displayOn = true;
   bool inaConfigured = false;
@@ -232,6 +234,7 @@ class DashboardSnapshot {
         chargedAmpHours = packet.chargedAmpHours;
         dischargedWattHours = packet.dischargedWattHours;
         chargedWattHours = packet.chargedWattHours;
+        energyPersistEnabled = packet.energyPersistEnabled;
         break;
       case DashboardPacketType.state:
         hasState = true;

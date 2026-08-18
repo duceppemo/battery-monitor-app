@@ -61,6 +61,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
   bool _protectionEnabledField = false;
   bool _temperatureFahrenheit = false;
   static const _temperatureUnitPrefKey = 'temperature_unit_fahrenheit';
+  static const _lastMonitorIdPrefKey = 'last_monitor_stable_id';
   final _protectionLowVoltageController = TextEditingController();
   final _protectionLowSocController = TextEditingController();
 
@@ -103,6 +104,8 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
   bool get _supportsSoc => _deviceInfo?.contains('soc1') ?? false;
   bool get _supportsProtection =>
       _deviceInfo?.contains('protection1') ?? false;
+  bool get _supportsEnergyPersistence =>
+      _deviceInfo?.contains('energyp1') ?? false;
   String get _temperatureUnitLabel => _temperatureFahrenheit ? 'deg F' : 'deg C';
   double? _displayTemperature(double? celsius) => celsius == null
       ? null
@@ -114,6 +117,8 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
       'Reading...';
   String? get _connectedFirmwareVersion =>
       RegExp(r'FW=([^;]+)').firstMatch(_deviceInfo ?? '')?.group(1);
+  String? get _monitorStableId =>
+      RegExp(r'ID=([^;]+)').firstMatch(_deviceInfo ?? '')?.group(1);
   bool get _firmwareUpdateAvailable {
     final release = _firmwareRelease;
     final installed = _connectedFirmwareVersion;
@@ -591,6 +596,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
       final value = await widget.ble.deviceInfo(deviceId);
       if (mounted && _selectedDeviceId == deviceId) {
         setState(() => _deviceInfo = value);
+        await _checkMonitorIdentity();
       }
     } on Object {
       // Firmware predating this characteristic remains compatible.
@@ -598,6 +604,24 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
         setState(() => _deviceInfo = 'Unavailable (update firmware)');
       }
     }
+  }
+
+  /// Firmware 0.5.15+ reports a stable per-chip ID in Device Information,
+  /// independent of the OS-assigned BLE address used to scan/connect (which
+  /// on iOS is a privacy-scoped identifier that can change over time even
+  /// for the same physical monitor). Warn if it doesn't match the last
+  /// monitor this app connected to, since that's the one case where the
+  /// scan result could silently be a different physical unit.
+  Future<void> _checkMonitorIdentity() async {
+    final id = _monitorStableId;
+    if (id == null) return;
+    final preferences = await SharedPreferences.getInstance();
+    final previousId = preferences.getString(_lastMonitorIdPrefKey);
+    if (previousId != null && previousId != id && mounted) {
+      _showMessage(
+          'Connected to a different monitor than last time (ID $id, was $previousId).');
+    }
+    await preferences.setString(_lastMonitorIdPrefKey, id);
   }
 
   Future<void> _loadAlarms() async {
@@ -1639,6 +1663,17 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
               '${_format(_dashboard.dischargedAmpHours, 'Ah')}  /  ${_format(_dashboard.dischargedWattHours, 'Wh')}'),
           _valueRow('Charged',
               '${_format(_dashboard.chargedAmpHours, 'Ah')}  /  ${_format(_dashboard.chargedWattHours, 'Wh')}'),
+          if (_supportsEnergyPersistence) ...[
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: const Text('Keep these totals across reboots'),
+              value: _dashboard.energyPersistEnabled,
+              onChanged: _canControl
+                  ? (v) => _saveEnergyPersistence(v ?? false)
+                  : null,
+            ),
+          ],
           const SizedBox(height: 10),
           Align(
             alignment: Alignment.centerLeft,
@@ -1653,6 +1688,21 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
         ],
       ),
     );
+  }
+
+  Future<void> _saveEnergyPersistence(bool enabled) async {
+    final deviceId = _selectedDeviceId;
+    if (!_canControl || deviceId == null) return;
+    try {
+      await widget.ble.saveEnergyPersistence(deviceId, enabled: enabled);
+      if (mounted) {
+        _showMessage(enabled
+            ? 'Session totals will now survive a reboot.'
+            : 'Session totals will reset on the next power cycle.');
+      }
+    } on Object catch (error) {
+      if (mounted) _showMessage('Setting was not saved: $error');
+    }
   }
 
   void _loadAlarmsFromMonitor() {

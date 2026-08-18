@@ -53,6 +53,8 @@ abstract interface class BatteryMonitorBleClient {
 
   Future<void> testDisconnectLoad(String deviceId);
 
+  Future<void> saveEnergyPersistence(String deviceId, {required bool enabled});
+
   Future<String> deviceInfo(String deviceId);
 
   Future<void> installFirmware(
@@ -270,6 +272,10 @@ class BatteryMonitorBle implements BatteryMonitorBleClient {
   @override
   Future<void> testDisconnectLoad(String deviceId) =>
       sendControl(deviceId, const [15]);
+
+  @override
+  Future<void> saveEnergyPersistence(String deviceId, {required bool enabled}) =>
+      sendControl(deviceId, [16, enabled ? 1 : 0]);
 
   @override
   Future<String> deviceInfo(String deviceId) async {

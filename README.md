@@ -19,10 +19,11 @@ download and install.
 
 ## Current version
 
-`0.3.9+18` — a focused, foreground BLE companion for one monitor at a time:
+`0.3.12+21` — a focused, foreground BLE companion for one monitor at a time:
 live telemetry and dashboard data, acknowledged controls, session logging
 with CSV export and capacity test reports, BLE OTA, home Wi-Fi setup, a
-battery fuel gauge, and load-protection relay control. See
+battery fuel gauge, load-protection relay control, a stable per-monitor
+identity check, and opt-in session-energy persistence. See
 [docs/FEATURES.md](docs/FEATURES.md) for the full feature list and how each
 one works.
 

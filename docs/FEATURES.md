@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-The current app version is `0.3.9+18`. It provides a focused, foreground BLE
+The current app version is `0.3.12+21`. It provides a focused, foreground BLE
 companion for one monitor at a time:
 
 1. Service-filtered scan, connection lifecycle and an active disconnect action.
@@ -40,6 +40,16 @@ companion for one monitor at a time:
     force-disconnect controls that bypass every threshold to verify the
     relay wiring itself. Mirrors the Web Dashboard's card exactly, so either
     transport can configure or test it.
+12. A stable per-monitor identity on firmware 0.5.15+: the app compares each
+    connection's `ID` (from Device Information) against the last monitor it
+    connected to and warns if they differ, since the OS-assigned BLE address
+    used to scan/connect isn't a reliable "same device" signal on its own —
+    iOS in particular can rotate it for the same physical monitor.
+13. Opt-in session Ah/Wh persistence on firmware 0.5.15+ (`energyp1`): a
+    checkbox on the Session energy card lets these totals survive a reboot
+    instead of resetting every power cycle. Off by default; enabling it
+    starts persisting the totals already accumulating, it does not restore
+    an old saved value over live progress.
 
 The firmware/app compatibility contract is
 [BLE_PROTOCOL.md](BLE_PROTOCOL.md). Treat a protocol change as a

@@ -23,6 +23,7 @@ void main() {
       ..setInt32(5, 234, Endian.little)
       ..setInt32(9, 5678, Endian.little)
       ..setInt32(13, 678, Endian.little);
+    energy[17] = 1; // Session persistence enabled.
 
     final snapshot = DashboardSnapshot()
       ..update(DashboardPacketV1.decode(extrema))
@@ -36,6 +37,16 @@ void main() {
     expect(snapshot.temperatureMinCelsius, 28);
     expect(snapshot.dischargedAmpHours, 1.234);
     expect(snapshot.chargedWattHours, 0.678);
+    expect(snapshot.energyPersistEnabled, isTrue);
+  });
+
+  test('defaults energy persistence to disabled', () {
+    final energy = Uint8List(20);
+    energy[0] = 0x12;
+
+    final snapshot = DashboardSnapshot()..update(DashboardPacketV1.decode(energy));
+
+    expect(snapshot.energyPersistEnabled, isFalse);
   });
 
   test('rejects a malformed dashboard page', () {

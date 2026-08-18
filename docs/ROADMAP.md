@@ -54,10 +54,14 @@
   (`protection1`): save thresholds/enable, reconnect after a trip, and
   bench-test force-connect/force-disconnect. Verified end-to-end against
   real SSR hardware.
+- [x] Add opt-in session Ah/Wh persistence on firmware 0.5.15+
+  (`energyp1`): a checkbox on the Session energy card, off by default.
 
 ## Later
 
-- [ ] Add a stable firmware-provided monitor serial-number characteristic.
+- [x] Add a stable firmware-provided monitor serial-number characteristic:
+  firmware 0.5.15+ includes a per-chip `ID` in Device Information; the app
+  compares it against the last-connected monitor and warns on a mismatch.
 - [ ] Design authenticated firmware OTA as a separate firmware/app feature.
 - [ ] Consider optional on-device or cloud persistence only after the data
   lifetime, privacy and battery impact are defined.
