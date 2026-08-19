@@ -18,6 +18,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class MonitorDashboard extends StatefulWidget {
   MonitorDashboard({
@@ -87,6 +88,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
   bool _demoMode = false;
   int _demoSequence = 0;
   String _appUpdateStatus = 'Check for a newer Battery Monitor app release.';
+  GithubRelease? _appRelease;
   GithubRelease? _firmwareRelease;
   Uint8List? _downloadedFirmware;
   Uint8List? _downloadedFirmwareSignature;
@@ -132,6 +134,12 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
     return release != null &&
         installed != null &&
         GithubReleaseChecker.isNewer(release.version, installed);
+  }
+
+  bool get _appUpdateAvailable {
+    final release = _appRelease;
+    return release != null &&
+        GithubReleaseChecker.isNewer(release.version, AppBuildInfo.version);
   }
 
   bool get _downloadedFirmwareCanInstall {
@@ -264,12 +272,29 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
                 )
                   ? 'Installed app v${AppBuildInfo.version} is newer than the latest published v${release.version}'
                   : 'App v${AppBuildInfo.version} is up to date';
-      if (mounted) setState(() => _appUpdateStatus = status);
+      if (mounted) {
+        setState(() {
+          _appRelease = release;
+          _appUpdateStatus = status;
+        });
+      }
     } on Object catch (error) {
       if (mounted) {
-        setState(() => _appUpdateStatus =
-            'App update check failed: ${GithubReleaseChecker.describeRequestError(error)}');
+        setState(() {
+          _appRelease = null;
+          _appUpdateStatus =
+              'App update check failed: ${GithubReleaseChecker.describeRequestError(error)}';
+        });
       }
+    }
+  }
+
+  Future<void> _openAppReleasePage() async {
+    final release = _appRelease;
+    if (release == null) return;
+    final opened = await launchUrl(release.url, mode: LaunchMode.externalApplication);
+    if (!opened && mounted) {
+      _showMessage('Could not open the release page. Visit ${release.url} to download it.');
     }
   }
 
@@ -1604,6 +1629,8 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
           const SizedBox(height: 12),
           _connectionAndUpdatesSection(context),
           const SizedBox(height: 12),
+          _appUpdateSection(context),
+          const SizedBox(height: 12),
           _firmwareUpdateSection(context),
           const SizedBox(height: 24),
           Center(
@@ -1629,9 +1656,9 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
         leading: Icon(isShowingMonitor
             ? Icons.bluetooth_connected
             : Icons.bluetooth_searching),
-        title: const Text('Connection & app update'),
+        title: const Text('Connection'),
         subtitle: Text(isShowingMonitor
-            ? 'Connected — tap to scan, switch monitor, or check for an app update'
+            ? 'Connected — tap to scan or switch monitor'
             : 'Scan for a monitor or start the demo'),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         children: [
@@ -1652,17 +1679,7 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
                 label:
                     Text(_demoMode ? 'Stop demo monitor' : 'Try demo monitor'),
               ),
-              OutlinedButton.icon(
-                onPressed: _checkAppUpdates,
-                icon: const Icon(Icons.system_update_outlined),
-                label: const Text('Check app update'),
-              ),
             ],
-          ),
-          Padding(
-            padding: const EdgeInsets.only(top: 10),
-            child: Text(_appUpdateStatus,
-                style: Theme.of(context).textTheme.bodySmall),
           ),
           if (_savedMonitors.isNotEmpty) ...[
             Padding(
@@ -1708,14 +1725,18 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
     final isConnectingThis = isSelected && _isConnecting;
     // A saved entry is just a memory of a past connection -- it says
     // nothing about whether the monitor is actually in range right now.
-    // Only a scan (or already being connected/connecting to it) confirms
-    // that, so the Connect button stays low-emphasis until then rather
-    // than looking equally "ready" as a monitor we just found.
+    // Only a scan actually finding it (or already being connected/
+    // connecting to it) confirms that. Require it: the button is disabled,
+    // not just low-emphasis, until then -- a saved address alone was
+    // letting a tap attempt (and fail) a real connection to a monitor that
+    // was never confirmed reachable, which is exactly the false "ready"
+    // signal this is meant to avoid.
     final confirmedPresent = _devices.containsKey(monitor.lastDeviceAddress);
     final label =
         isDisconnect ? 'Disconnect' : isConnectingThis ? 'Connecting...' : 'Connect';
-    final connectPressed =
-        isConnectingThis ? null : () => _connectSaved(monitor);
+    final connectPressed = confirmedPresent && !isConnectingThis
+        ? () => _connectSaved(monitor)
+        : null;
     return Card(
       child: ListTile(
         leading: Icon(
@@ -1734,10 +1755,8 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
                 onPressed: _disconnect,
                 child: const Text('Disconnect'),
               )
-            else if (confirmedPresent || isConnectingThis)
-              FilledButton(onPressed: connectPressed, child: Text(label))
             else
-              OutlinedButton(onPressed: connectPressed, child: Text(label)),
+              FilledButton(onPressed: connectPressed, child: Text(label)),
             PopupMenuButton<String>(
               onSelected: (action) {
                 if (action == 'rename') _renameSavedMonitor(monitor);
@@ -2274,6 +2293,39 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
           _valueRow('Uptime', _formatUptime(_dashboard.uptimeSeconds)),
           _valueRow('Firmware', 'v$_monitorFirmwareVersion'),
           _valueRow('Device', _deviceInfo ?? 'Reading device information...'),
+        ],
+      ),
+    );
+  }
+
+  Widget _appUpdateSection(BuildContext context) {
+    return _SectionCard(
+      title: 'Battery Monitor app update',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _appUpdateStatus,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _checkAppUpdates,
+                icon: const Icon(Icons.system_update_outlined),
+                label: const Text('Check app update'),
+              ),
+              if (_appUpdateAvailable)
+                FilledButton.icon(
+                  onPressed: _openAppReleasePage,
+                  icon: const Icon(Icons.open_in_new),
+                  label: Text('Download v${_appRelease!.version}'),
+                ),
+            ],
+          ),
         ],
       ),
     );

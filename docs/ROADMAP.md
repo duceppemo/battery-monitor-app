@@ -104,8 +104,8 @@
   it's remembered; and Rename is only offered while connected to that
   specific monitor, since doing it while disconnected only relabels this
   phone's local copy, which a `name1`-authoritative monitor would silently
-  overwrite on the next connect. Verified live: fresh app open shows an
-  outlined Connect button and a disabled Rename until a scan confirms
+  overwrite on the next connect. Verified live: fresh app open shows a
+  low-emphasis Connect button and a disabled Rename until a scan confirms
   presence.
 - [x] Fixed a real regression in the above, caught by testing against an
   actually-unreachable monitor rather than trusting the first fix: after a
@@ -118,3 +118,19 @@
   by holding the monitor's only BLE connection slot open from a separate
   client so a real connection attempt from the app would genuinely fail,
   then confirming the button stayed outlined afterward.
+- [x] Tightened further on more feedback: a saved entry's Connect button
+  wasn't just low-emphasis before a scan confirmed presence, it was still
+  fully clickable and would attempt (and fail) a real connection. Changed
+  to a genuinely disabled button (`onPressed: null`, greyed out by Flutter's
+  standard disabled styling) until `confirmedPresent` is true, rather than
+  an always-clickable outline. Verified live: tapping the greyed button on
+  a fresh app open does nothing (no "Connecting..." triggered).
+- [x] Gave the app's own update check a dedicated **Battery Monitor app
+  update** card, separate from the **Connection** card's monitor scan/demo
+  controls (previously bundled together as "Connection & app update"), and
+  added a **Download** button that opens the release's GitHub page in the
+  browser via `url_launcher` once a newer version is found -- the app is
+  sideloaded, not store-distributed, so this is as far as an in-app update
+  reasonably goes without a new Android install-package permission and a
+  FileProvider setup, which wasn't judged worth the added complexity.
+  Verified live, including the actual browser hand-off.

@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-The current app version is `0.3.16+25`. It provides a focused, foreground BLE
+The current app version is `0.3.18+27`. It provides a focused, foreground BLE
 companion for one monitor at a time:
 
 1. Service-filtered scan, connection lifecycle and an active disconnect action.
@@ -64,10 +64,11 @@ companion for one monitor at a time:
     list instead of showing twice, and any not-yet-saved result shows a
     distinguishing default name (a fragment of its BLE address) instead of
     the generic name every monitor advertises. A saved entry's Connect
-    button only looks equally "ready" (filled) once a scan has actually
-    found it, or it's already connected/connecting — otherwise it's a
-    lower-emphasis outline, since being saved says nothing about whether
-    the monitor is actually in range right now. Renaming is only offered
+    button is disabled until a scan has actually found it (or it's already
+    connected/connecting) — being saved says nothing about whether the
+    monitor is actually in range right now, so tapping Connect never
+    attempts (and fails) a connection to one that isn't. Renaming is only
+    offered
     while connected to that specific monitor: doing it while disconnected
     would only relabel this phone's local copy, which a name1-authoritative
     monitor (see below) would then silently overwrite on the next connect.
@@ -196,11 +197,19 @@ this app.
 
 ## Firmware updates
 
-The **Connection & app update** card checks only for a newer Android/iOS app
-release; it does not query monitor firmware. For a monitor update, first
-connect by BLE so the app can read the installed firmware version. The
-**Monitor firmware update** card then checks the firmware release, compares
-versions, and offers **Download** only when an update exists. The app keeps the
+A dedicated **Battery Monitor app update** card checks only for a newer
+Android/iOS app release; it does not query monitor firmware, and has its own
+**Check app update** button separate from the **Connection** card's monitor
+scan/demo controls. When a newer app version is published, a **Download**
+button appears and opens that release's GitHub page in the browser (the app
+is sideloaded, not distributed through an app store, so installing an update
+is still a manual step from there) rather than leaving you to find the URL
+yourself.
+
+For a monitor update, first connect by BLE so the app can read the installed
+firmware version. The **Monitor firmware update** card then checks the
+firmware release, compares versions, and offers **Download** only when an
+update exists. The app keeps the
 image in memory, so it can then transfer it over BLE without joining the
 monitor Wi-Fi AP. Firmware 0.5.1+ accepts **Install via BLE** and the app waits
 for its CRC-32/image-verification status before restart.

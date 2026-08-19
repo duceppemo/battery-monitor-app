@@ -23,7 +23,9 @@ void main() {
 
     expect(find.text('Battery Monitor'), findsOneWidget);
     expect(find.text('Scan for monitors'), findsOneWidget);
-    expect(find.text('Connection & app update'), findsOneWidget);
+    expect(find.text('Connection'), findsOneWidget);
+    expect(find.text('Battery Monitor app update'), findsOneWidget);
+    expect(find.text('Check app update'), findsOneWidget);
     expect(find.text('Monitor firmware update'), findsOneWidget);
     expect(find.text('Check for updates'), findsOneWidget);
   });
