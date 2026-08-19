@@ -19,13 +19,18 @@ download and install.
 
 ## Current version
 
-`0.3.12+21` — a focused, foreground BLE companion for one monitor at a time:
+`0.3.18+27` — a focused, foreground BLE companion for one monitor at a time:
 live telemetry and dashboard data, acknowledged controls, session logging
-with CSV export and capacity test reports, BLE OTA, home Wi-Fi setup, a
-battery fuel gauge, load-protection relay control, a stable per-monitor
-identity check, and opt-in session-energy persistence. See
+with CSV export and capacity test reports, signed BLE OTA, home Wi-Fi setup,
+a battery fuel gauge, load-protection relay control, a remembered list of
+saved monitors with a device-side name shared with the Web Dashboard, and
+opt-in session-energy persistence. See
 [docs/FEATURES.md](docs/FEATURES.md) for the full feature list and how each
 one works.
+
+| Live dashboard | Saved monitors |
+| --- | --- |
+| ![Live values, session energy and controls](docs/images/app_dashboard.png) | ![Saved monitors list with quick reconnect](docs/images/app_saved_monitors.png) |
 
 ## Documentation
 
