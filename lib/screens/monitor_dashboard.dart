@@ -2752,7 +2752,13 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
   static Widget _valueRow(String label, String value) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 3),
         child: Row(
-          children: [Expanded(child: Text(label)), Text(value)],
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: Text(label)),
+            Flexible(
+              child: Text(value, textAlign: TextAlign.right),
+            ),
+          ],
         ),
       );
 
