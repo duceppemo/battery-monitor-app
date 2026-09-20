@@ -53,6 +53,18 @@ void main() {
     expect(() => DashboardPacketV1.decode(const [0x11]), throwsFormatException);
   });
 
+  test('tryDecode drops unknown page types and bad lengths', () {
+    final unknown = Uint8List(20);
+    unknown[0] = 0x7F;
+
+    expect(DashboardPacketV1.tryDecode(unknown), isNull);
+    expect(DashboardPacketV1.tryDecode(const [0x11]), isNull);
+
+    final energy = Uint8List(20);
+    energy[0] = 0x12;
+    expect(DashboardPacketV1.tryDecode(energy)?.type, DashboardPacketType.energy);
+  });
+
   test('decodes a Wi-Fi station status dashboard page', () {
     final wifi = Uint8List(20);
     wifi[0] = 0x17;

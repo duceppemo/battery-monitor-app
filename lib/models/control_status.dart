@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-enum ControlResult { idle, applied, rejected, failed }
+enum ControlResult { idle, applied, rejected, failed, unknown }
 
 class ControlStatus {
   const ControlStatus({
@@ -22,7 +22,10 @@ class ControlStatus {
       1 => ControlResult.applied,
       2 => ControlResult.rejected,
       3 => ControlResult.failed,
-      _ => throw FormatException('Unknown control result ${value[4]}'),
+      // A result code this app version does not know (newer firmware).
+      // Surfacing it as a value lets the pending command fail with a
+      // readable message instead of an unhandled stream error.
+      _ => ControlResult.unknown,
     };
     return ControlStatus(
       command: value[1],
@@ -37,5 +40,7 @@ class ControlStatus {
         ControlResult.applied => 'applied',
         ControlResult.rejected => 'rejected because another command is pending',
         ControlResult.failed => 'could not be saved by the monitor',
+        ControlResult.unknown =>
+          'returned a result this app version does not recognize',
       };
 }

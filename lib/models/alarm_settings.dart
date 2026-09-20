@@ -7,9 +7,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 class AlarmSettings {
   const AlarmSettings({
     this.lowVoltageEnabled = false,
-    this.lowVoltage = 3.0,
+    this.lowVoltage = 11.0,
     this.highVoltageEnabled = false,
-    this.highVoltage = 4.25,
+    this.highVoltage = 15.0,
     this.currentEnabled = false,
     this.maxAbsoluteCurrent = 5.0,
     this.temperatureEnabled = false,
@@ -92,9 +92,9 @@ class AlarmSettings {
 
   factory AlarmSettings.fromJson(Map<String, dynamic> json) => AlarmSettings(
         lowVoltageEnabled: json['lowVoltageEnabled'] == true,
-        lowVoltage: (json['lowVoltage'] as num?)?.toDouble() ?? 3.0,
+        lowVoltage: (json['lowVoltage'] as num?)?.toDouble() ?? 11.0,
         highVoltageEnabled: json['highVoltageEnabled'] == true,
-        highVoltage: (json['highVoltage'] as num?)?.toDouble() ?? 4.25,
+        highVoltage: (json['highVoltage'] as num?)?.toDouble() ?? 15.0,
         currentEnabled: json['currentEnabled'] == true,
         maxAbsoluteCurrent:
             (json['maxAbsoluteCurrent'] as num?)?.toDouble() ?? 5.0,

@@ -665,7 +665,12 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
     final canSyncToDevice = _supportsDeviceName &&
         _isConnected &&
         monitor.lastDeviceAddress == _selectedDeviceId;
-    if (canSyncToDevice) {
+    final nameProblem = BatteryMonitorBle.deviceNameProblem(name);
+    if (canSyncToDevice && nameProblem != null) {
+      // The monitor would reject it; say why and keep the phone-local name.
+      _showMessage(
+          'The monitor cannot use that name ($nameProblem) Saved it on this phone only.');
+    } else if (canSyncToDevice) {
       try {
         await widget.ble.saveDeviceName(monitor.lastDeviceAddress, name);
         // Re-reads Device Information and, via _checkMonitorIdentity,
@@ -1402,8 +1407,8 @@ class _MonitorDashboardState extends State<MonitorDashboard> {
         title: const Text('Final Kelvin shunt checklist'),
         content: const Text(
           '1. Put the shunt in the battery negative path.\n\n'
-          '2. Connect INA228 VIN+ to the battery/source side Kelvin sense terminal.\n\n'
-          '3. Connect INA228 VIN- to the load side Kelvin sense terminal.\n\n'
+          '2. Connect INA228 VIN- to the battery/source side (battery negative) Kelvin sense terminal.\n\n'
+          '3. Connect INA228 VIN+ to the load side Kelvin sense terminal.\n\n'
           '4. Keep sense wires twisted and separate from the high-current cables.\n\n'
           '5. Start with no load, capture zero, then verify with a small known load before higher current.\n\n'
           'This orientation reports discharge current as positive.',

@@ -117,9 +117,13 @@ class BatteryMonitorBle implements BatteryMonitorBleClient {
       characteristicId: BleIds.dashboard,
       deviceId: deviceId,
     );
+    // Unknown page types from a newer firmware are dropped, not surfaced
+    // as stream errors that would tear down the whole dashboard feed.
     return _client
         .subscribeToCharacteristic(characteristic)
-        .map(DashboardPacketV1.decode);
+        .map(DashboardPacketV1.tryDecode)
+        .where((packet) => packet != null)
+        .cast<DashboardPacketV1>();
   }
 
   @override
@@ -286,11 +290,27 @@ class BatteryMonitorBle implements BatteryMonitorBleClient {
 
   @override
   Future<void> saveDeviceName(String deviceId, String name) async {
-    final nameBytes = utf8.encode(name);
-    if (nameBytes.length > 32) {
-      throw ArgumentError.value(name, 'name', 'Must be at most 32 UTF-8 bytes.');
+    final problem = deviceNameProblem(name);
+    if (problem != null) {
+      throw ArgumentError.value(name, 'name', problem);
     }
+    final nameBytes = utf8.encode(name);
     await sendControl(deviceId, [17, nameBytes.length, ...nameBytes]);
+  }
+
+  /// Mirrors the firmware's DeviceNameSettings::isValid so a rejected
+  /// name is explained here instead of failing opaquely on the monitor:
+  /// printable ASCII only (the name is embedded in the semicolon-delimited
+  /// Device Information string, so ';' is excluded), at most 32 bytes.
+  static String? deviceNameProblem(String name) {
+    if (name.length > 32) return 'Must be at most 32 characters.';
+    for (final unit in name.codeUnits) {
+      if (unit < 0x20 || unit > 0x7E) {
+        return 'Only plain ASCII letters, digits and punctuation are allowed.';
+      }
+      if (unit == 0x3B) return 'The name cannot contain ";".';
+    }
+    return null;
   }
 
   @override
@@ -301,7 +321,9 @@ class BatteryMonitorBle implements BatteryMonitorBleClient {
       deviceId: deviceId,
     );
     final value = await _client.readCharacteristic(characteristic);
-    return String.fromCharCodes(value);
+    // The firmware only emits ASCII today, but decode as UTF-8 so a future
+    // multi-byte name is not mangled one byte per character.
+    return utf8.decode(value, allowMalformed: true);
   }
 
   @override

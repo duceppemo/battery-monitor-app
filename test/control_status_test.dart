@@ -12,10 +12,13 @@ void main() {
 
   test('rejects malformed control result packets', () {
     expect(() => ControlStatus.decode(const [1, 4]), throwsFormatException);
-    expect(
-      () => ControlStatus.decode(const [1, 4, 0, 0, 99, 0]),
-      throwsFormatException,
-    );
+  });
+
+  test('maps an unrecognized result code to unknown instead of throwing', () {
+    final status = ControlStatus.decode(const [1, 4, 0, 0, 99, 0]);
+
+    expect(status.result, ControlResult.unknown);
+    expect(status.description, contains('does not recognize'));
   });
 
   test('accepts the characteristic idle value', () {

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 enum BlePermissionState { ready, denied, permanentlyDenied }
@@ -12,34 +13,36 @@ abstract interface class BlePermissionGate {
 }
 
 class PlatformBlePermissionGate implements BlePermissionGate {
+  PlatformBlePermissionGate({Future<int> Function()? androidSdkVersion})
+      : _androidSdkVersion = androidSdkVersion ?? _readAndroidSdkVersion;
+
+  final Future<int> Function() _androidSdkVersion;
+
+  static Future<int> _readAndroidSdkVersion() async =>
+      (await DeviceInfoPlugin().androidInfo).version.sdkInt;
+
   @override
   Future<BlePermissionState> request() async {
     if (!Platform.isAndroid) {
       return BlePermissionState.ready;
     }
 
-    final permissions = <Permission>[
-      Permission.bluetoothScan,
-      Permission.bluetoothConnect,
-      // This is declared only through API 30. On Android 12+ it resolves
-      // harmlessly to denied/not-applicable; BLE permissions drive the Nearby
-      // devices prompt there.
-      Permission.locationWhenInUse,
-    ];
+    // Ask only for what this OS version actually gates BLE on. Requesting
+    // the legacy location permission on Android 12+ meant a stale
+    // "permanently denied" answer to it blocked scanning even though both
+    // Nearby devices permissions were granted; on Android 11 and older the
+    // Nearby devices permissions do not exist and report granted, so they
+    // must not be allowed to vouch for a missing location grant either.
+    final sdkInt = await _androidSdkVersion();
+    final permissions = sdkInt >= 31
+        ? const [Permission.bluetoothScan, Permission.bluetoothConnect]
+        : const [Permission.locationWhenInUse];
     final results = await permissions.request();
 
     if (results.values.any((status) => status.isPermanentlyDenied)) {
       return BlePermissionState.permanentlyDenied;
     }
-
-    // Android 12+ requires both Nearby devices permissions. Treating either
-    // one as enough led to a misleading ready state after a partial grant.
-    final bluetoothReady =
-        results[Permission.bluetoothScan]?.isGranted == true &&
-            results[Permission.bluetoothConnect]?.isGranted == true;
-    final locationReady =
-        results[Permission.locationWhenInUse]?.isGranted == true;
-    return bluetoothReady || locationReady
+    return results.values.every((status) => status.isGranted)
         ? BlePermissionState.ready
         : BlePermissionState.denied;
   }

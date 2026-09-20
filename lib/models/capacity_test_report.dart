@@ -22,7 +22,9 @@ enum CapacityTestVerdict { pass, fail, inconclusive }
 /// already captured by [SessionLog]; nothing is fetched from the monitor.
 ///
 /// The Peukert-adjusted figures only appear when the caller supplies both a
-/// Peukert exponent and the discharge duration the rated capacity was
+/// Peukert exponent (at least 1.0; below that the law is meaningless and a
+/// typo like 0.15 would silently inflate the verdict) and the discharge
+/// duration the rated capacity was
 /// specified at ([referenceDischargeHours]) — there is no built-in default
 /// for either, since guessing wrong for an unknown chemistry would make a
 /// pass/fail verdict silently untrustworthy. Without them the report still
@@ -112,7 +114,7 @@ class CapacityTestReport {
         averageDischargeCurrentAmps != null &&
         averageDischargeCurrentAmps > 0 &&
         peukertExponent != null &&
-        peukertExponent > 0 &&
+        peukertExponent >= 1.0 &&
         referenceDischargeHours != null &&
         referenceDischargeHours > 0 &&
         ratedCapacityAh != null &&
@@ -129,9 +131,10 @@ class CapacityTestReport {
     }
 
     final verdictPercent = peukertAdjustedPercentOfRated ?? percentOfRated;
+    final threshold = passThresholdPercent.clamp(0.0, 100.0);
     final verdict = verdictPercent == null
         ? CapacityTestVerdict.inconclusive
-        : (verdictPercent >= passThresholdPercent
+        : (verdictPercent >= threshold
             ? CapacityTestVerdict.pass
             : CapacityTestVerdict.fail);
 
@@ -145,9 +148,10 @@ class CapacityTestReport {
       percentOfRated: percentOfRated,
       peukertAdjustedCapacityAh: peukertAdjustedCapacityAh,
       peukertAdjustedPercentOfRated: peukertAdjustedPercentOfRated,
-      peukertExponent: peukertExponent,
-      referenceDischargeHours: referenceDischargeHours,
-      passThresholdPercent: passThresholdPercent,
+      peukertExponent: peukertAdjustedCapacityAh == null ? null : peukertExponent,
+      referenceDischargeHours:
+          peukertAdjustedCapacityAh == null ? null : referenceDischargeHours,
+      passThresholdPercent: threshold,
       verdict: verdict,
     );
   }

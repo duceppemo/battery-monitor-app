@@ -57,7 +57,8 @@ class _CapacityReportScreenState extends State<CapacityReportScreen> {
       referenceDischargeHours:
           double.tryParse(_referenceHoursController.text.trim()),
       passThresholdPercent:
-          double.tryParse(_thresholdController.text.trim()) ?? 80,
+          (double.tryParse(_thresholdController.text.trim()) ?? 80)
+              .clamp(0.0, 100.0),
     );
   }
 
@@ -195,7 +196,7 @@ class _CapacityReportScreenState extends State<CapacityReportScreen> {
                             decimal: true),
                         decoration: const InputDecoration(
                           labelText: 'Peukert exponent',
-                          helperText: 'e.g. 1.1–1.3 lead-acid, ~1.05 LiFePO₄',
+                          helperText: '≥ 1: e.g. 1.1–1.3 lead-acid, ~1.05 LiFePO₄',
                         ),
                         onChanged: (_) => setState(_recompute),
                       ),
@@ -587,5 +588,6 @@ class _DischargeCurvePainter extends CustomPainter {
   bool shouldRepaint(covariant _DischargeCurvePainter oldDelegate) =>
       oldDelegate.points != points ||
       oldDelegate.lineColor != lineColor ||
-      oldDelegate.gridColor != gridColor;
+      oldDelegate.gridColor != gridColor ||
+      oldDelegate.textColor != textColor;
 }

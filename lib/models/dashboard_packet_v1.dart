@@ -32,6 +32,26 @@ class DashboardPacketV1 {
   final DashboardPacketType type;
   final Uint8List _packet;
 
+  /// Like [decode], but returns null for a page this app version does not
+  /// know (a newer firmware adding a page type must not turn the whole
+  /// dashboard stream into an error) or for a malformed length.
+  static DashboardPacketV1? tryDecode(List<int> bytes) {
+    if (bytes.length != packetLength) return null;
+    const known = {
+      _extrema,
+      _energy,
+      _state,
+      _calibration,
+      _shunt,
+      _alarms,
+      _wifi,
+      _stateOfCharge,
+      _loadProtection,
+    };
+    if (!known.contains(bytes[0])) return null;
+    return DashboardPacketV1.decode(bytes);
+  }
+
   factory DashboardPacketV1.decode(List<int> bytes) {
     if (bytes.length != packetLength) {
       throw FormatException(
